@@ -836,6 +836,7 @@ def create_model_and_transforms(
         cache_dir: Optional[str] = None,
         output_dict: Optional[bool] = None,
         weights_only: bool = True,
+        colorspace: str = "rgb",
         **model_kwargs,
 ):
     """
@@ -942,10 +943,12 @@ def create_model_and_transforms(
         pp_cfg,
         is_train=True,
         aug_cfg=aug_cfg,
+        color_space=colorspace
     )
     preprocess_val = image_transform_v2(
         pp_cfg,
         is_train=False,
+        color_space=colorspace
     )
 
     return model, preprocess_train, preprocess_val

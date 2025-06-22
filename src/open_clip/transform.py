@@ -238,6 +238,8 @@ class CenterCropOrPad(torch.nn.Module):
 def _convert_to_rgb(image):
     return image.convert('RGB')
 
+def _convert_to_ycbcr(image):
+    return image.convert('YCbCr')
 
 class color_jitter(object):
     """
@@ -280,6 +282,7 @@ def image_transform(
         interpolation: Optional[str] = None,
         fill_color: int = 0,
         aug_cfg: Optional[Union[Dict[str, Any], AugmentationCfg]] = None,
+        color_space: str = "rgb",
 ):
     mean = mean or OPENAI_DATASET_MEAN
     if not isinstance(mean, (list, tuple)):
@@ -303,6 +306,14 @@ def image_transform(
         aug_cfg = aug_cfg or AugmentationCfg()
 
     normalize = Normalize(mean=mean, std=std)
+
+    #Convert image to colorspace
+    if color_space.lower() == "rgb":
+        _convert_function = _convert_to_rgb
+    elif color_space.lower() == "ycbcr":
+        _convert_function = _convert_to_ycbcr
+    else:
+        raise NotImplementedError()
 
     if is_train:
         aug_cfg_dict = {k: v for k, v in asdict(aug_cfg).items() if v is not None}
@@ -337,7 +348,7 @@ def image_transform(
                     scale=aug_cfg_dict.pop('scale'),
                     interpolation=InterpolationMode.BICUBIC,
                 ),
-                _convert_to_rgb,
+                _convert_function,
             ]
             if aug_cfg.color_jitter_prob:
                 assert aug_cfg.color_jitter is not None and len(aug_cfg.color_jitter) == 4
@@ -383,19 +394,19 @@ def image_transform(
             transforms += [CenterCrop(image_size)]
 
         transforms.extend([
-            _convert_to_rgb,
+            _convert_function,
             ToTensor(),
             normalize,
         ])
         return Compose(transforms)
 
-
 def image_transform_v2(
         cfg: PreprocessCfg,
         is_train: bool,
         aug_cfg: Optional[Union[Dict[str, Any], AugmentationCfg]] = None,
+        color_space: str = "rgb"
 ):
-    return image_transform(
+    var = image_transform(
         image_size=cfg.size,
         is_train=is_train,
         mean=cfg.mean,
@@ -404,4 +415,9 @@ def image_transform_v2(
         resize_mode=cfg.resize_mode,
         fill_color=cfg.fill_color,
         aug_cfg=aug_cfg,
+        color_space=color_space
     )
+
+    print(var)
+
+    return var

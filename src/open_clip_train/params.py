@@ -480,6 +480,14 @@ def parse_args(args):
         help='A string to specify a specific distributed loss implementation.'
     )
 
+    parser.add_argument(
+        '--colorspace',
+        type=str,
+        default='rgb',
+        choices=['rgb','ycbcr'],
+        help='Colorspace to use for image preprocessing.'
+)
+
     args = parser.parse_args(args)
 
     if 'timm' not in args.opt:
