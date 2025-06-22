@@ -239,7 +239,7 @@ def main(args):
         pretrained_image=args.pretrained_image,
         output_dict=True,
         cache_dir=args.cache_dir,
-        colorspace=args.colorspace
+        colorspace=args.colorspace,
         **model_kwargs,
     )
     if args.distill:
