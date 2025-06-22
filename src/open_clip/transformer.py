@@ -554,6 +554,22 @@ class VisionTransformer(nn.Module):
             bias=False,
         )
 
+        self.conv_y = nn.Conv2d(
+            in_channels=1,
+            out_channels=width,
+            kernel_size=patch_size,
+            stride=patch_size,
+            bias=False,
+        )
+
+        self.conv_cbcr = nn.Conv2d(
+            in_channels=2,
+            out_channels=width,
+            kernel_size=patch_size,
+            stride=patch_size,
+            bias=False,
+        )
+
         # class embeddings and positional embeddings
         scale = width ** -0.5
         self.class_embedding = nn.Parameter(scale * torch.randn(width))
@@ -698,6 +714,43 @@ class VisionTransformer(nn.Module):
 
         return pooled, tokens
 
+    def _rgb_to_ycbcr(self, x):
+        r, g, b = x[:, 0:1], x[:, 1:2], x[:, 2:3]
+        y  = 0.299 * r + 0.587 * g + 0.114 * b
+        cb = -0.169 * r - 0.331 * g + 0.5 * b + 0.5
+        cr = 0.5 * r - 0.419 * g - 0.081 * b + 0.5
+        return torch.cat([y, cb, cr], dim=1)
+
+    def _embedsV2(self, x:torch.Tensor) -> torch.Tensor:
+        # Convert RGB to YCbCr
+        x_ycbcr = self._rgb_to_ycbcr(x)  # shape [B, 3, H, W]
+
+        # Split channels
+        y = x_ycbcr[:, 0:1, :, :]       # (B,1,H,W)
+        cbcr = x_ycbcr[:, 1:3, :, :]    # (B,2,H,W)
+
+        # Apply separate convs
+        feat_y = self.conv_y(y)          # (B, width_y, grid, grid)
+        feat_cbcr = self.conv_cbcr(cbcr)    # (B, width_cbcr, grid, grid)
+
+        # Concatenate features on channel dim (embedding dim)
+        x = torch.cat([feat_y, feat_cbcr], dim=1)  # (B, width, grid, grid)
+
+        # Flatten patches
+        x = x.reshape(x.shape[0], x.shape[1], -1)  # (B, width, grid**2)
+        x = x.permute(0, 2, 1)                     # (B, grid**2, width)
+
+        # Add class and positional embeddings
+        x = torch.cat([_expand_token(self.class_embedding, x.shape[0]).to(x.dtype), x], dim=1)  # (B, grid**2+1, width)
+        x = x + self.positional_embedding.to(x.dtype)
+
+        # Patch dropout
+        x = self.patch_dropout(x)
+
+        # Norm before transformer
+        x = self.ln_pre(x)
+        return x
+
     def _embeds(self, x:torch.Tensor) -> torch.Tensor:
         x = self.conv1(x)  # shape = [*, dim, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
@@ -768,7 +821,7 @@ class VisionTransformer(nn.Module):
 
         # forward pass
         B, _, height, width = x.shape
-        x = self._embeds(x)
+        x = self._embedsV2(x)
         x, intermediates = self.transformer.forward_intermediates(
             x,
             indices=indices,
@@ -823,7 +876,7 @@ class VisionTransformer(nn.Module):
         return take_indices
 
     def forward(self, x: torch.Tensor):
-        x = self._embeds(x)
+        x = self._embedsV2(x)
         x = self.transformer(x)
         pooled, tokens = self._pool(x)
 
