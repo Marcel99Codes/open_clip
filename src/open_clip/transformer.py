@@ -546,13 +546,13 @@ class VisionTransformer(nn.Module):
         self.final_ln_after_pool = final_ln_after_pool  # currently ignored w/ attn pool enabled
         self.output_dim = output_dim
 
-        self.conv1 = nn.Conv2d(
-            in_channels=3,
-            out_channels=width,
-            kernel_size=patch_size,
-            stride=patch_size,
-            bias=False,
-        )
+        # self.conv1 = nn.Conv2d(
+        #     in_channels=3,
+        #     out_channels=width,
+        #     kernel_size=patch_size,
+        #     stride=patch_size,
+        #     bias=False,
+        # )
 
         self.conv_y = nn.Conv2d(
             in_channels=1,
