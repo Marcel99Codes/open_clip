@@ -251,7 +251,6 @@ def main(args):
             precision=args.precision,
             output_dict=True,
             cache_dir=args.cache_dir,
-            colorspace=args.colorspace
         )
     if args.use_bnb_linear is not None:
         print('=> using a layer from bitsandbytes.\n'
