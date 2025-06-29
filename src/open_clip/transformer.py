@@ -770,6 +770,44 @@ class VisionTransformer(nn.Module):
         # apply norm before transformer
         x = self.ln_pre(x)
         return x
+    
+    def _embedsV3(self, x: torch.Tensor) -> torch.Tensor:
+        # Convert RGB to YCbCr
+        x_ycbcr = self._rgb_to_ycbcr(x)  # (B, 3, H, W)
+
+        # Split Y and CbCr channels
+        y = x_ycbcr[:, 0:1, :, :]       # (B, 1, H, W)
+        cbcr = x_ycbcr[:, 1:3, :, :]    # (B, 2, H, W)
+
+        # Apply full-width convs
+        feat_y = self.conv_y(y)         # (B, width, grid, grid)
+        feat_cbcr = self.conv_cbcr(cbcr) # (B, width, grid, grid)
+
+        # Flatten both separately
+        tokens_y = feat_y.flatten(2).permute(0, 2, 1)     # (B, grid², width)
+        tokens_cbcr = feat_cbcr.flatten(2).permute(0, 2, 1) # (B, grid², width)
+
+        # Positional embeddings (reuse positional_embedding[:, 1:] twice)
+        pos_embed = self.positional_embedding.to(x.dtype)   # (1, grid²+1, width)
+        pos_tokens = pos_embed[:, 1:, :]                    # (1, grid², width)
+        pos_cls = pos_embed[:, :1, :]                       # (1, 1, width)
+
+        tokens_y = tokens_y + pos_tokens  # (B, grid², width)
+        tokens_cbcr = tokens_cbcr + pos_tokens  # (B, grid², width)
+
+        # Concatenate token sets → (B, 2×grid², width)
+        x_tokens = torch.cat([tokens_y, tokens_cbcr], dim=1)
+
+        # Add class token
+        cls_token = _expand_token(self.class_embedding, x.shape[0]).to(x.dtype) + pos_cls
+        x_tokens = torch.cat([cls_token, x_tokens], dim=1)  # (B, 2×grid² + 1, width)
+
+        # Patch dropout and layernorm
+        x_tokens = self.patch_dropout(x_tokens)
+        x_tokens = self.ln_pre(x_tokens)
+
+        return x_tokens
+
 
     def _pool(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         if self.attn_pool is not None:
@@ -824,7 +862,7 @@ class VisionTransformer(nn.Module):
 
         # forward pass
         B, _, height, width = x.shape
-        x = self._embedsV2(x)
+        x = self._embedsV3(x)
         x, intermediates = self.transformer.forward_intermediates(
             x,
             indices=indices,
@@ -879,7 +917,7 @@ class VisionTransformer(nn.Module):
         return take_indices
 
     def forward(self, x: torch.Tensor):
-        x = self._embedsV2(x)
+        x = self._embedsV3(x)
         x = self.transformer(x)
         pooled, tokens = self._pool(x)
 
