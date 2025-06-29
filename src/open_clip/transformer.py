@@ -554,12 +554,12 @@ class VisionTransformer(nn.Module):
         #     bias=False,
         # )
 
-        self.width_y = int(width * 0.75)
-        self.width_cbcr = width - self.width_y
+        #self.width_y = int(width * 0.75)
+        #self.width_cbcr = width - self.width_y
 
         self.conv_y = nn.Conv2d(
             in_channels=1,
-            out_channels=self.width_y,
+            out_channels=width,
             kernel_size=patch_size,
             stride=patch_size,
             bias=False,
@@ -567,7 +567,7 @@ class VisionTransformer(nn.Module):
 
         self.conv_cbcr = nn.Conv2d(
             in_channels=2,
-            out_channels=self.width_cbcr,
+            out_channels=width,
             kernel_size=patch_size,
             stride=patch_size,
             bias=False,
