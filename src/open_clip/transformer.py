@@ -788,7 +788,9 @@ class VisionTransformer(nn.Module):
         tokens_cbcr = feat_cbcr.flatten(2).permute(0, 2, 1) # (B, grid², width)
 
         # Positional embeddings (reuse positional_embedding[:, 1:] twice)
-        pos_embed = self.positional_embedding.to(x.dtype)   # (1, grid²+1, width)
+        pos_embed = self.positional_embedding.to(x.dtype)   # possibly (grid² + 1, width)
+        if pos_embed.ndim == 2:
+            pos_embed = pos_embed.unsqueeze(0)  
         pos_tokens = pos_embed[:, 1:, :]                    # (1, grid², width)
         pos_cls = pos_embed[:, :1, :]                       # (1, 1, width)
 
