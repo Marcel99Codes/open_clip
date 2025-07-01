@@ -717,16 +717,29 @@ class VisionTransformer(nn.Module):
 
         return pooled, tokens
 
-    def _rgb_to_ycbcr(self, x):
+    def _rgb_to_ycbcr_0_5(self, x):
         r, g, b = x[:, 0:1], x[:, 1:2], x[:, 2:3]
         y  = 0.299 * r + 0.587 * g + 0.114 * b
         cb = -0.169 * r - 0.331 * g + 0.5 * b + 0.5
         cr = 0.5 * r - 0.419 * g - 0.081 * b + 0.5
         return torch.cat([y, cb, cr], dim=1)
+    
+    def _rgb_to_ycbcr_1(self, x):
+        """
+        Assumes x ∈ [0,1], shaped as [B, 3, H, W] with RGB channels.
+        Outputs YCbCr also in [0,1] range.
+        """
+        r, g, b = x[:, 0:1], x[:, 1:2], x[:, 2:3]
+
+        y  = 0.299   * r + 0.587   * g + 0.114   * b
+        cb = -0.168736 * r - 0.331264 * g + 0.5     * b + 0.5
+        cr =  0.5     * r - 0.418688 * g - 0.081312 * b + 0.5
+
+        return torch.cat([y, cb, cr], dim=1)
 
     def _embedsV2(self, x: torch.Tensor) -> torch.Tensor:
         # Convert RGB to YCbCr
-        x_ycbcr = self._rgb_to_ycbcr(x)  # shape (B, 3, H, W)
+        x_ycbcr = self._rgb_to_ycbcr_0_5(x)  # shape (B, 3, H, W)
 
         # Split Y and CbCr channels
         y = x_ycbcr[:, 0:1, :, :]       # (B, 1, H, W)
@@ -772,8 +785,10 @@ class VisionTransformer(nn.Module):
         return x
     
     def _embedsV3(self, x: torch.Tensor) -> torch.Tensor:
+        print(f"[DEBUG] RGB input range: min={x.min().item():.4f}, max={x.max().item():.4f}")
+
         # Convert RGB to YCbCr
-        x_ycbcr = self._rgb_to_ycbcr(x)  # (B, 3, H, W)
+        x_ycbcr = self._rgb_to_ycbcr_1(x)  # (B, 3, H, W)
 
         # Split Y and CbCr channels
         y = x_ycbcr[:, 0:1, :, :]       # (B, 1, H, W)
