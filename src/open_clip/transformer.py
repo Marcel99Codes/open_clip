@@ -788,7 +788,8 @@ class VisionTransformer(nn.Module):
         print(f"[DEBUG] RGB input range: min={x.min().item():.4f}, max={x.max().item():.4f}")
 
         # Convert RGB to YCbCr
-        x_ycbcr = self._rgb_to_ycbcr_1(x)  # (B, 3, H, W)
+        #x_ycbcr = self._rgb_to_ycbcr_1(x)  # (B, 3, H, W)
+        x_ycbcr = x
 
         # Split Y and CbCr channels
         y = x_ycbcr[:, 0:1, :, :]       # (B, 1, H, W)
