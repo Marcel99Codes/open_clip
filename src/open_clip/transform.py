@@ -238,8 +238,33 @@ class CenterCropOrPad(torch.nn.Module):
 def _convert_to_rgb(image):
     return image.convert('RGB')
 
-def _convert_to_ycbcr(image):
-    return image.convert('YCbCr')
+# def _convert_to_ycbcr(image):
+#     return image.convert('YCbCr')
+
+import cv2
+import numpy as np
+from PIL import Image
+
+class ConvertToHsv:
+    def __call__(self, img):
+        if isinstance(img, Image.Image):
+            img = np.array(img)
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+        return Image.fromarray(img)
+    
+class ConvertToYcbcr:
+    def __call__(self, img):
+        if isinstance(img, Image.Image):
+            img = np.array(img)
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)
+        return Image.fromarray(img)
+    
+class ConvertToLab:
+    def __call__(self, img):
+        if isinstance(img, Image.Image):
+            img = np.array(img)
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
+        return Image.fromarray(img)
 
 class color_jitter(object):
     """
@@ -307,11 +332,18 @@ def image_transform(
 
     normalize = Normalize(mean=mean, std=std)
 
+    #Print the mean and std value
+    print(f"[DEBUG] Normalized mean ={mean:.4f}, std={std:.4f}")
+
     #Convert image to colorspace
     if color_space.lower() == "rgb":
-        _convert_function = _convert_to_rgb
+        _convert_function = lambda x: x # Identity function
     elif color_space.lower() == "ycbcr":
-        _convert_function = _convert_to_ycbcr
+        _convert_function = ConvertToYcbcr()
+    elif color_space.lower() == "hsv":
+        _convert_function = ConvertToHsv()
+    elif color_space.lower() == "lab":
+        _convert_function = ConvertToLab()
     else:
         raise NotImplementedError()
 
@@ -348,7 +380,7 @@ def image_transform(
                     scale=aug_cfg_dict.pop('scale'),
                     interpolation=InterpolationMode.BICUBIC,
                 ),
-                _convert_function,
+                _convert_to_rgb,
             ]
             if aug_cfg.color_jitter_prob:
                 assert aug_cfg.color_jitter is not None and len(aug_cfg.color_jitter) == 4
@@ -360,6 +392,7 @@ def image_transform(
                     gray_scale(aug_cfg.gray_scale_prob)
                 ])
             train_transform.extend([
+                _convert_function,
                 ToTensor(),
                 normalize,
             ])
@@ -394,6 +427,7 @@ def image_transform(
             transforms += [CenterCrop(image_size)]
 
         transforms.extend([
+            _convert_to_rgb,
             _convert_function,
             ToTensor(),
             normalize,

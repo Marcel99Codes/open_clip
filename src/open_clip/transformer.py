@@ -536,6 +536,7 @@ class VisionTransformer(nn.Module):
             act_layer: Callable = nn.GELU,
             norm_layer: Callable = LayerNorm,
             output_tokens: bool = False,
+            color_space_tokenization: str = "single"
     ):
         super().__init__()
         assert pool_type in ('tok', 'avg', 'none')
@@ -546,18 +547,24 @@ class VisionTransformer(nn.Module):
         self.final_ln_after_pool = final_ln_after_pool  # currently ignored w/ attn pool enabled
         self.output_dim = output_dim
 
-        # self.conv1 = nn.Conv2d(
-        #     in_channels=3,
-        #     out_channels=width,
-        #     kernel_size=patch_size,
-        #     stride=patch_size,
-        #     bias=False,
-        # )
+        if color_space_tokenization == "single":
+            self.embeds = self._embeds
+        elif color_space_tokenization == "shape1":
+            self.embeds = self._embeds_single_channel1
+        elif color_space_tokenization == "shape3":
+            self.embeds = self._embeds_single_channel3
+        else:
+            raise NotImplementedError("Unkown colorspace for the tokenization-pipeline")
 
-        #self.width_y = int(width * 0.75)
-        #self.width_cbcr = width - self.width_y
+        self.conv1 = nn.Conv2d(
+            in_channels=3,
+            out_channels=width,
+            kernel_size=patch_size,
+            stride=patch_size,
+            bias=False,
+        )
 
-        self.conv_y = nn.Conv2d(
+        self.conv_a = nn.Conv2d(
             in_channels=1,
             out_channels=width,
             kernel_size=patch_size,
@@ -565,7 +572,7 @@ class VisionTransformer(nn.Module):
             bias=False,
         )
 
-        self.conv_cbcr = nn.Conv2d(
+        self.conv_b = nn.Conv2d(
             in_channels=2,
             out_channels=width,
             kernel_size=patch_size,
@@ -717,57 +724,9 @@ class VisionTransformer(nn.Module):
 
         return pooled, tokens
 
-    def _rgb_to_ycbcr_0_5(self, x):
-        r, g, b = x[:, 0:1], x[:, 1:2], x[:, 2:3]
-        y  = 0.299 * r + 0.587 * g + 0.114 * b
-        cb = -0.169 * r - 0.331 * g + 0.5 * b + 0.5
-        cr = 0.5 * r - 0.419 * g - 0.081 * b + 0.5
-        return torch.cat([y, cb, cr], dim=1)
-    
-    def _rgb_to_ycbcr_1(self, x):
-        """
-        Assumes x ∈ [0,1], shaped as [B, 3, H, W] with RGB channels.
-        Outputs YCbCr also in [0,1] range.
-        """
-        r, g, b = x[:, 0:1], x[:, 1:2], x[:, 2:3]
-
-        y  = 0.299   * r + 0.587   * g + 0.114   * b
-        cb = -0.168736 * r - 0.331264 * g + 0.5     * b + 0.5
-        cr =  0.5     * r - 0.418688 * g - 0.081312 * b + 0.5
-
-        return torch.cat([y, cb, cr], dim=1)
-
-    def _embedsV2(self, x: torch.Tensor) -> torch.Tensor:
-        # Convert RGB to YCbCr
-        x_ycbcr = self._rgb_to_ycbcr_0_5(x)  # shape (B, 3, H, W)
-
-        # Split Y and CbCr channels
-        y = x_ycbcr[:, 0:1, :, :]       # (B, 1, H, W)
-        cbcr = x_ycbcr[:, 1:3, :, :]    # (B, 2, H, W)
-
-        # Apply separate convs
-        feat_y = self.conv_y(y)         # (B, width // 2, grid, grid)
-        feat_cbcr = self.conv_cbcr(cbcr) # (B, width // 2, grid, grid)
-
-        # Concatenate features on channel (embedding) dim
-        x = torch.cat([feat_y, feat_cbcr], dim=1)  # (B, width, grid, grid)
-
-        # Flatten grid
-        x = x.reshape(x.shape[0], x.shape[1], -1)  # (B, width, grid**2)
-        x = x.permute(0, 2, 1)                     # (B, grid**2, width)
-
-        # Add class and positional embeddings
-        x = torch.cat([_expand_token(self.class_embedding, x.shape[0]).to(x.dtype), x], dim=1)  # (B, grid**2+1, width)
-        x = x + self.positional_embedding.to(x.dtype)
-
-        # Apply patch dropout and layernorm
-        x = self.patch_dropout(x)
-        x = self.ln_pre(x)
-
-        return x
-
-
     def _embeds(self, x:torch.Tensor) -> torch.Tensor:
+        print(f"[DEBUG] RGB input range: min={x.min().item():.4f}, max={x.max().item():.4f}")
+
         x = self.conv1(x)  # shape = [*, dim, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
@@ -784,24 +743,21 @@ class VisionTransformer(nn.Module):
         x = self.ln_pre(x)
         return x
     
-    def _embedsV3(self, x: torch.Tensor) -> torch.Tensor:
-        print(f"[DEBUG] RGB input range: min={x.min().item():.4f}, max={x.max().item():.4f}")
+    def _embeds_single_channel1(self, x: torch.Tensor) -> torch.Tensor:
+        print(f"[DEBUG] Colorspace input range: min={x.min().item():.4f}, max={x.max().item():.4f}")
 
-        # Convert RGB to YCbCr
-        #x_ycbcr = self._rgb_to_ycbcr_1(x)  # (B, 3, H, W)
-        x_ycbcr = x
-
-        # Split Y and CbCr channels
-        y = x_ycbcr[:, 0:1, :, :]       # (B, 1, H, W)
-        cbcr = x_ycbcr[:, 1:3, :, :]    # (B, 2, H, W)
+        # Split shape and color channels
+        c_shape = x[:, 0:1, :, :]   # (B, 1, H, W)
+        c_color = x[:, 1:3, :, :]    # (B, 2, H, W)
+        
 
         # Apply full-width convs
-        feat_y = self.conv_y(y)         # (B, width, grid, grid)
-        feat_cbcr = self.conv_cbcr(cbcr) # (B, width, grid, grid)
+        feat_shape = self.conv_a(c_shape)         # (B, width, grid, grid)
+        feat_color = self.conv_b(c_color) # (B, width, grid, grid)
 
         # Flatten both separately
-        tokens_y = feat_y.flatten(2).permute(0, 2, 1)     # (B, grid², width)
-        tokens_cbcr = feat_cbcr.flatten(2).permute(0, 2, 1) # (B, grid², width)
+        tokens_shape = feat_shape.flatten(2).permute(0, 2, 1)     # (B, grid², width)
+        tokens_color = feat_color.flatten(2).permute(0, 2, 1) # (B, grid², width)
 
         # Positional embeddings (reuse positional_embedding[:, 1:] twice)
         pos_embed = self.positional_embedding.to(x.dtype)   # possibly (grid² + 1, width)
@@ -810,11 +766,50 @@ class VisionTransformer(nn.Module):
         pos_tokens = pos_embed[:, 1:, :]                    # (1, grid², width)
         pos_cls = pos_embed[:, :1, :]                       # (1, 1, width)
 
-        tokens_y = tokens_y + pos_tokens  # (B, grid², width)
-        tokens_cbcr = tokens_cbcr + pos_tokens  # (B, grid², width)
+        tokens_shape = tokens_shape + pos_tokens  # (B, grid², width)
+        tokens_color = tokens_color + pos_tokens  # (B, grid², width)
 
         # Concatenate token sets → (B, 2×grid², width)
-        x_tokens = torch.cat([tokens_y, tokens_cbcr], dim=1)
+        x_tokens = torch.cat([tokens_shape, tokens_color], dim=1)
+
+        # Add class token
+        cls_token = _expand_token(self.class_embedding, x.shape[0]).to(x.dtype) + pos_cls
+        x_tokens = torch.cat([cls_token, x_tokens], dim=1)  # (B, 2×grid² + 1, width)
+
+        # Patch dropout and layernorm
+        x_tokens = self.patch_dropout(x_tokens)
+        x_tokens = self.ln_pre(x_tokens)
+
+        return x_tokens
+    
+    def _embeds_single_channel3(self, x: torch.Tensor, singel_channel=1) -> torch.Tensor:
+        print(f"[DEBUG] Colorspace input range: min={x.min().item():.4f}, max={x.max().item():.4f}")
+
+        # Split shape and color channels
+        c_color = x[:, 0:2, :, :]    # (B, 2, H, W)
+        c_shape = x[:, 2:3, :, :]   # (B, 1, H, W)
+        
+
+        # Apply full-width convs
+        feat_shape = self.conv_a(c_shape)         # (B, width, grid, grid)
+        feat_color = self.conv_b(c_color) # (B, width, grid, grid)
+
+        # Flatten both separately
+        tokens_shape = feat_shape.flatten(2).permute(0, 2, 1)     # (B, grid², width)
+        tokens_color = feat_color.flatten(2).permute(0, 2, 1) # (B, grid², width)
+
+        # Positional embeddings (reuse positional_embedding[:, 1:] twice)
+        pos_embed = self.positional_embedding.to(x.dtype)   # possibly (grid² + 1, width)
+        if pos_embed.ndim == 2:
+            pos_embed = pos_embed.unsqueeze(0)  
+        pos_tokens = pos_embed[:, 1:, :]                    # (1, grid², width)
+        pos_cls = pos_embed[:, :1, :]                       # (1, 1, width)
+
+        tokens_shape = tokens_shape + pos_tokens  # (B, grid², width)
+        tokens_color = tokens_color + pos_tokens  # (B, grid², width)
+
+        # Concatenate token sets → (B, 2×grid², width)
+        x_tokens = torch.cat([tokens_shape, tokens_color], dim=1)
 
         # Add class token
         cls_token = _expand_token(self.class_embedding, x.shape[0]).to(x.dtype) + pos_cls
@@ -880,7 +875,7 @@ class VisionTransformer(nn.Module):
 
         # forward pass
         B, _, height, width = x.shape
-        x = self._embedsV3(x)
+        x = self.embeds(x)
         x, intermediates = self.transformer.forward_intermediates(
             x,
             indices=indices,
@@ -935,7 +930,7 @@ class VisionTransformer(nn.Module):
         return take_indices
 
     def forward(self, x: torch.Tensor):
-        x = self._embedsV3(x)
+        x = self.embeds(x)
         x = self.transformer(x)
         pooled, tokens = self._pool(x)
 
