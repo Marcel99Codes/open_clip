@@ -333,7 +333,7 @@ def image_transform(
     normalize = Normalize(mean=mean, std=std)
 
     #Print the mean and std value
-    print(f"[DEBUG] Normalized mean ={mean:.4f}, std={std:.4f}")
+    print(f"[DEBUG] Normalized mean={mean}, std={std}")
 
     #Convert image to colorspace
     if color_space.lower() == "rgb":

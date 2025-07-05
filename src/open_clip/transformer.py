@@ -750,7 +750,6 @@ class VisionTransformer(nn.Module):
         c_shape = x[:, 0:1, :, :]   # (B, 1, H, W)
         c_color = x[:, 1:3, :, :]    # (B, 2, H, W)
         
-
         # Apply full-width convs
         feat_shape = self.conv_a(c_shape)         # (B, width, grid, grid)
         feat_color = self.conv_b(c_color) # (B, width, grid, grid)
@@ -789,7 +788,6 @@ class VisionTransformer(nn.Module):
         c_color = x[:, 0:2, :, :]    # (B, 2, H, W)
         c_shape = x[:, 2:3, :, :]   # (B, 1, H, W)
         
-
         # Apply full-width convs
         feat_shape = self.conv_a(c_shape)         # (B, width, grid, grid)
         feat_color = self.conv_b(c_color) # (B, width, grid, grid)
