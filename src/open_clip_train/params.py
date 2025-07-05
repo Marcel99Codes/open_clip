@@ -486,7 +486,14 @@ def parse_args(args):
         default='rgb',
         choices=['rgb','ycbcr', 'hsv', 'lab'],
         help='Colorspace to use for image preprocessing.'
-)
+    )
+
+    parser.add_argument(
+        '--shard_dir',
+        type=str,
+        default='/data1/marcel/clip_training/data/shards',
+        help='Path to the dataset shards for computing the mean and std'
+    )
 
     args = parser.parse_args(args)
 

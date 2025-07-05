@@ -220,6 +220,18 @@ def main(args):
     if args.siglip:
         model_kwargs['init_logit_scale'] = np.log(10)  # different from CLIP
         model_kwargs['init_logit_bias'] = -10
+
+
+    # Computing the mean and std for other colorspaces
+    if args.colorspace != 'rgb':
+        print("[INFO] Computing dataset mean/std ...")
+        mean, std = compute_streaming_mean_std(args.train_data_path, color_space='hsv', max_images=100000)
+        print(f"Mean ({args.color_space.upper()}): {mean}")
+        print(f"Std ({args.color_space.upper()}): {std}")
+        args.image_mean = mean
+        args.image_std = std
+
+
     model, preprocess_train, preprocess_val = create_model_and_transforms(
         args.model,
         args.pretrained,
@@ -551,6 +563,89 @@ def copy_codebase(args):
     copytree(current_code_path, new_code_path, ignore=ignore_patterns('log', 'logs', 'wandb'))
     print("Done copying code.")
     return 1
+
+
+import os
+import numpy as np
+from PIL import Image
+from tqdm import tqdm
+import webdataset as wds
+import cv2
+
+def convert_to_color_space(img, color_space):
+    """
+    Converts a PIL image to a numpy array in the specified color space.
+    Output is always normalized to [0, 1].
+    """
+    img = img.convert("RGB")
+    np_img = np.array(img)
+
+    if color_space.lower() == "rgb":
+        return np_img / 255.0
+
+    elif color_space.lower() == "hsv":
+        hsv_img = cv2.cvtColor(np_img, cv2.COLOR_RGB2HSV)
+        return hsv_img / 255.0
+
+    elif color_space.lower() == "ycbcr":
+        ycbcr_img = cv2.cvtColor(np_img, cv2.COLOR_RGB2YCrCb)  # OpenCV uses YCrCb notation
+        return ycbcr_img / 255.0
+
+    elif color_space.lower() == "lab":
+        lab_img = cv2.cvtColor(np_img, cv2.COLOR_RGB2LAB)
+        # L in [0,100], a and b in ~[-127,+127]; normalize to [0,1] for consistency
+        lab_img = lab_img.astype(np.float32)
+        lab_img[..., 0] /= 100.0
+        lab_img[..., 1:] = (lab_img[..., 1:] + 128) / 255.0
+        return lab_img
+
+    else:
+        raise ValueError(f"Unsupported color space: {color_space}")
+
+def compute_streaming_mean_std(image_dir, color_space='hsv', max_images=None):
+    # Collect all .tar shards
+    shard_paths = [os.path.join(image_dir, f) for f in os.listdir(image_dir)
+                   if f.endswith(".tar")]
+    shard_paths.sort()
+
+    # Wrap into WebDataset
+    dataset = wds.WebDataset(shard_paths).decode("pil")  # decode PIL images directly
+
+    n_pixels = 0
+    channel_sum = np.zeros(3, dtype=np.float64)
+    channel_squared_sum = np.zeros(3, dtype=np.float64)
+
+    count = 0
+    for sample in tqdm(dataset, desc="Computing mean/std"):
+        try:
+            # Look for image key (common: "jpg" or "png")
+            for ext in ["jpg", "png", "jpeg", "webp"]:
+                if ext in sample:
+                    img = sample[ext]
+                    break
+            else:
+                continue  # skip if no image found
+
+            img = img.convert("RGB")
+            img = convert_to_color_space(img, color_space)
+            h, w, c = img.shape
+            n_pixels += h * w
+
+            channel_sum += img.sum(axis=(0, 1))
+            channel_squared_sum += (img ** 2).sum(axis=(0, 1))
+            count += 1
+            if max_images is not None and count >= max_images:
+                break
+        except Exception as e:
+            print(f"Skipping sample: {e}")
+            continue
+
+    if n_pixels == 0:
+        raise RuntimeError("No valid images found in the dataset.")
+
+    mean = channel_sum / n_pixels
+    std = np.sqrt(channel_squared_sum / n_pixels - mean ** 2)
+    return mean.tolist(), std.tolist()
 
 
 if __name__ == "__main__":
