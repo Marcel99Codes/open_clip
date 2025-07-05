@@ -489,7 +489,7 @@ def parse_args(args):
     )
 
     parser.add_argument(
-        '--shard_dir',
+        '--shards_dir',
         type=str,
         default='/data1/marcel/clip_training/data/shards',
         help='Path to the dataset shards for computing the mean and std'
