@@ -564,7 +564,9 @@ def copy_codebase(args):
     print("Done copying code.")
     return 1
 
+# This is just temporal!!!!!!!!!!!!!!!!!!1
 import os
+import glob
 import numpy as np
 from tqdm import tqdm
 from PIL import Image
@@ -584,28 +586,29 @@ def convert_to_color_space(img_pil, color_space='rgb'):
     else:
         raise ValueError(f"Unsupported color space: {color_space}")
 
-def compute_streaming_mean_std(shards_dir, color_space='rgb', max_images=10000, batch_size=512):
+def compute_streaming_mean_std(shards_dir, color_space='rgb', max_images=10000, batch_size=64):
     node_rank = int(os.environ.get("RANK", 0))
     num_nodes = int(os.environ.get("WORLD_SIZE", 1))
 
+    all_shards = sorted(glob.glob(os.path.join(shards_dir, "*.tar")))
+    if num_nodes > 1:
+        shards_for_node = [shard for i, shard in enumerate(all_shards) if i % num_nodes == node_rank]
+    else:
+        shards_for_node = all_shards
+
     dataset = (
-        wds.WebDataset(os.path.join(shards_dir, "*.tar"))
+        wds.WebDataset(shards_for_node)
         .shuffle(1000)
         .decode("pil")
         .to_tuple("jpg")
+        .batched(batch_size)
     )
-
-    if num_nodes > 1:
-        dataset = dataset.shard(num_nodes, node_rank)
-
-    dataset = dataset.batched(batch_size)
 
     n_pixels = 0
     channel_sum = np.zeros(3, dtype=np.float64)
     channel_squared_sum = np.zeros(3, dtype=np.float64)
 
     processed = 0
-
     for batch in tqdm(dataset, desc="Computing mean/std"):
         for img_pil in batch:
             try:
@@ -617,16 +620,17 @@ def compute_streaming_mean_std(shards_dir, color_space='rgb', max_images=10000, 
                 channel_squared_sum += (img ** 2).sum(axis=(0, 1))
 
                 processed += 1
-                if max_images and processed >= max_images:
+                if processed >= max_images:
                     break
             except Exception as e:
                 print(f"Skipping image due to error: {e}")
-        if max_images and processed >= max_images:
+        if processed >= max_images:
             break
 
     mean = channel_sum / n_pixels
     std = np.sqrt(channel_squared_sum / n_pixels - mean ** 2)
     return mean.tolist(), std.tolist()
+
 
 
 
