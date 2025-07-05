@@ -484,7 +484,7 @@ def parse_args(args):
         '--colorspace',
         type=str,
         default='rgb',
-        choices=['rgb','ycbcr'],
+        choices=['rgb','ycbcr', 'hsv', 'lab'],
         help='Colorspace to use for image preprocessing.'
 )
 
