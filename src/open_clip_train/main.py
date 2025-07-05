@@ -564,84 +564,78 @@ def copy_codebase(args):
     print("Done copying code.")
     return 1
 
-
 import os
 import numpy as np
-from PIL import Image
 from tqdm import tqdm
+from PIL import Image
 import webdataset as wds
+from torchvision import transforms
 import cv2
 
-def convert_to_color_space(img, color_space):
-    """
-    Converts a PIL image to a numpy array in the specified color space.
-    Output is always normalized to [0, 1].
-    """
-    img = img.convert("RGB")
-    np_img = np.array(img)
+def convert_to_color_space(img_pil, color_space='rgb'):
+    """Convert PIL Image to desired color space, return numpy array."""
+    img_np = np.array(img_pil)
 
-    if color_space.lower() == "rgb":
-        return np_img / 255.0
-
-    elif color_space.lower() == "hsv":
-        hsv_img = cv2.cvtColor(np_img, cv2.COLOR_RGB2HSV)
-        return hsv_img / 255.0
-
-    elif color_space.lower() == "ycbcr":
-        ycbcr_img = cv2.cvtColor(np_img, cv2.COLOR_RGB2YCrCb)  # OpenCV uses YCrCb notation
-        return ycbcr_img / 255.0
-
-    elif color_space.lower() == "lab":
-        lab_img = cv2.cvtColor(np_img, cv2.COLOR_RGB2LAB)
-        # L in [0,100], a and b in ~[-127,+127]; normalize to [0,1] for consistency
-        lab_img = lab_img.astype(np.float32)
-        lab_img[..., 0] /= 100.0
-        lab_img[..., 1:] = (lab_img[..., 1:] + 128) / 255.0
-        return lab_img
-
+    if color_space.lower() == 'rgb':
+        return img_np.astype(np.float32) / 255.0
+    elif color_space.lower() == 'hsv':
+        img_hsv = cv2.cvtColor(img_np, cv2.COLOR_RGB2HSV)
+        return img_hsv.astype(np.float32) / 255.0
+    elif color_space.lower() == 'ycbcr':
+        img_ycbcr = cv2.cvtColor(img_np, cv2.COLOR_RGB2YCrCb)
+        return img_ycbcr.astype(np.float32) / 255.0
+    elif color_space.lower() == 'lab':
+        img_lab = cv2.cvtColor(img_np, cv2.COLOR_RGB2LAB)
+        return img_lab.astype(np.float32) / 255.0
     else:
         raise ValueError(f"Unsupported color space: {color_space}")
 
-def compute_streaming_mean_std(image_dir, color_space='hsv', max_images=None):
-    # Collect all .tar shards
-    shard_paths = [os.path.join(image_dir, f) for f in os.listdir(image_dir)
-                   if f.endswith(".tar")]
-    shard_paths.sort()
+def compute_streaming_mean_std(shards_dir, color_space='rgb', max_images=None, batch_size=64):
+    """
+    Compute mean and std over images stored as WebDataset shards (tar files) in shards_dir.
 
-    # Wrap into WebDataset
-    dataset = wds.WebDataset(shard_paths).decode("pil")  # decode PIL images directly
+    Args:
+        shards_dir (str): Directory containing .tar shard files.
+        color_space (str): One of 'rgb', 'hsv', 'ycbcr', 'lab'.
+        max_images (int or None): max number of images to process.
+        batch_size (int): batch size for WebDataset iteration.
+
+    Returns:
+        mean (list): per-channel mean
+        std (list): per-channel std
+    """
+    dataset = (
+        wds.WebDataset(os.path.join(shards_dir, "*.tar"))
+        .shuffle(1000)
+        .decode("pil")
+        .to_tuple("jpg")
+        .nodesplitter()
+        .batched(batch_size)
+    )
 
     n_pixels = 0
     channel_sum = np.zeros(3, dtype=np.float64)
     channel_squared_sum = np.zeros(3, dtype=np.float64)
 
-    count = 0
-    for sample in tqdm(dataset, desc="Computing mean/std"):
-        try:
-            # Look for image key (common: "jpg" or "png")
-            for ext in ["jpg", "png", "jpeg", "webp"]:
-                if ext in sample:
-                    img = sample[ext]
+    processed = 0
+
+    for batch in tqdm(dataset, desc="Computing mean/std"):
+        for img_pil in batch:
+            try:
+                img = convert_to_color_space(img_pil, color_space)
+                h, w, c = img.shape
+                n_pixels += h * w
+
+                channel_sum += img.sum(axis=(0, 1))
+                channel_squared_sum += (img ** 2).sum(axis=(0, 1))
+
+                processed += 1
+                if max_images and processed >= max_images:
                     break
-            else:
-                continue  # skip if no image found
-
-            img = img.convert("RGB")
-            img = convert_to_color_space(img, color_space)
-            h, w, c = img.shape
-            n_pixels += h * w
-
-            channel_sum += img.sum(axis=(0, 1))
-            channel_squared_sum += (img ** 2).sum(axis=(0, 1))
-            count += 1
-            if max_images is not None and count >= max_images:
-                break
-        except Exception as e:
-            print(f"Skipping sample: {e}")
-            continue
-
-    if n_pixels == 0:
-        raise RuntimeError("No valid images found in the dataset.")
+            except Exception as e:
+                print(f"Skipping image due to error: {e}")
+        if max_images and processed >= max_images:
+            break
 
     mean = channel_sum / n_pixels
     std = np.sqrt(channel_squared_sum / n_pixels - mean ** 2)
