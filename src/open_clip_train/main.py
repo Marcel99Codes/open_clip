@@ -569,49 +569,36 @@ import numpy as np
 from tqdm import tqdm
 from PIL import Image
 import webdataset as wds
-from torchvision import transforms
 import cv2
 
 def convert_to_color_space(img_pil, color_space='rgb'):
-    """Convert PIL Image to desired color space, return numpy array."""
     img_np = np.array(img_pil)
-
     if color_space.lower() == 'rgb':
         return img_np.astype(np.float32) / 255.0
     elif color_space.lower() == 'hsv':
-        img_hsv = cv2.cvtColor(img_np, cv2.COLOR_RGB2HSV)
-        return img_hsv.astype(np.float32) / 255.0
+        return cv2.cvtColor(img_np, cv2.COLOR_RGB2HSV).astype(np.float32) / 255.0
     elif color_space.lower() == 'ycbcr':
-        img_ycbcr = cv2.cvtColor(img_np, cv2.COLOR_RGB2YCrCb)
-        return img_ycbcr.astype(np.float32) / 255.0
+        return cv2.cvtColor(img_np, cv2.COLOR_RGB2YCrCb).astype(np.float32) / 255.0
     elif color_space.lower() == 'lab':
-        img_lab = cv2.cvtColor(img_np, cv2.COLOR_RGB2LAB)
-        return img_lab.astype(np.float32) / 255.0
+        return cv2.cvtColor(img_np, cv2.COLOR_RGB2LAB).astype(np.float32) / 255.0
     else:
         raise ValueError(f"Unsupported color space: {color_space}")
 
-def compute_streaming_mean_std(shards_dir, color_space='rgb', max_images=None, batch_size=64):
-    """
-    Compute mean and std over images stored as WebDataset shards (tar files) in shards_dir.
+def compute_streaming_mean_std(shards_dir, color_space='rgb', max_images=10000, batch_size=512):
+    node_rank = int(os.environ.get("RANK", 0))
+    num_nodes = int(os.environ.get("WORLD_SIZE", 1))
 
-    Args:
-        shards_dir (str): Directory containing .tar shard files.
-        color_space (str): One of 'rgb', 'hsv', 'ycbcr', 'lab'.
-        max_images (int or None): max number of images to process.
-        batch_size (int): batch size for WebDataset iteration.
-
-    Returns:
-        mean (list): per-channel mean
-        std (list): per-channel std
-    """
     dataset = (
         wds.WebDataset(os.path.join(shards_dir, "*.tar"))
         .shuffle(1000)
         .decode("pil")
         .to_tuple("jpg")
-        .nodesplitter()
-        .batched(batch_size)
     )
+
+    if num_nodes > 1:
+        dataset = dataset.shard(num_nodes, node_rank)
+
+    dataset = dataset.batched(batch_size)
 
     n_pixels = 0
     channel_sum = np.zeros(3, dtype=np.float64)
@@ -640,6 +627,7 @@ def compute_streaming_mean_std(shards_dir, color_space='rgb', max_images=None, b
     mean = channel_sum / n_pixels
     std = np.sqrt(channel_squared_sum / n_pixels - mean ** 2)
     return mean.tolist(), std.tolist()
+
 
 
 if __name__ == "__main__":
