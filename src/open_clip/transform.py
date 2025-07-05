@@ -330,22 +330,24 @@ def image_transform(
     else:
         aug_cfg = aug_cfg or AugmentationCfg()
 
-    normalize = Normalize(mean=mean, std=std)
-
-    #Print the mean and std value
-    print(f"[DEBUG] Normalized mean={mean}, std={std}")
-
     #Convert image to colorspace
     if color_space.lower() == "rgb":
         _convert_function = lambda x: x # Identity function
+        normalize = Normalize(mean=mean, std=std)
     elif color_space.lower() == "ycbcr":
         _convert_function = ConvertToYcbcr()
+        normalize = lambda x: x
     elif color_space.lower() == "hsv":
         _convert_function = ConvertToHsv()
+        normalize = lambda x: x
     elif color_space.lower() == "lab":
         _convert_function = ConvertToLab()
+        normalize = lambda x: x
     else:
         raise NotImplementedError()
+    
+    #Print the mean and std value
+    print(f"[DEBUG] Normalized mean={mean}, std={std}")
 
     if is_train:
         aug_cfg_dict = {k: v for k, v in asdict(aug_cfg).items() if v is not None}

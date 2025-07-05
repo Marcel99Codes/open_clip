@@ -223,7 +223,7 @@ def main(args):
 
 
     # Computing the mean and std for other colorspaces
-    if args.colorspace != 'rgb':
+    if args.colorspace != 'rgb' and False:
         print("[INFO] Computing dataset mean/std ...")
         mean, std = compute_streaming_mean_std(args.shards_dir, color_space='hsv', max_images=100000)
         print(f"Mean ({args.color_space.upper()}): {mean}")
