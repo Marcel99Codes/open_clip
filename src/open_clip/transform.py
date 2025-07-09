@@ -333,16 +333,28 @@ def image_transform(
     #Convert image to colorspace
     if color_space.lower() == "rgb":
         _convert_function = lambda x: x # Identity function
-        normalize = Normalize(mean=mean, std=std)
+        if mean is None or std is None:
+            normalize = lambda x: x
+        else:
+            normalize = Normalize(mean=mean, std=std)
     elif color_space.lower() == "ycbcr":
         _convert_function = ConvertToYcbcr()
-        normalize = lambda x: x
+        if mean is None or std is None:
+            normalize = lambda x: x
+        else:
+            normalize = Normalize(mean=mean, std=std)
     elif color_space.lower() == "hsv":
         _convert_function = ConvertToHsv()
-        normalize = lambda x: x
+        if mean is None or std is None:
+            normalize = lambda x: x
+        else:
+            normalize = Normalize(mean=mean, std=std)
     elif color_space.lower() == "lab":
         _convert_function = ConvertToLab()
-        normalize = lambda x: x
+        if mean is None or std is None:
+            normalize = lambda x: x
+        else:
+            normalize = Normalize(mean=mean, std=std)
     else:
         raise NotImplementedError()
     
