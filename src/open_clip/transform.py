@@ -308,12 +308,14 @@ def image_transform(
         fill_color: int = 0,
         aug_cfg: Optional[Union[Dict[str, Any], AugmentationCfg]] = None,
         color_space: str = "rgb",
-):
-    mean = mean or OPENAI_DATASET_MEAN
+):  
+    if mean is None and color_space.lower() == "rgb":
+        mean = OPENAI_DATASET_MEAN
     if not isinstance(mean, (list, tuple)):
         mean = (mean,) * 3
 
-    std = std or OPENAI_DATASET_STD
+    if std is None and color_space.lower() == "rgb":
+        std = OPENAI_DATASET_STD
     if not isinstance(std, (list, tuple)):
         std = (std,) * 3
 
