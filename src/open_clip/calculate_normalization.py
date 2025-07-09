@@ -10,6 +10,7 @@ from torchvision.transforms.functional import InterpolationMode
 
 from open_clip.transform import image_transform
 
+
 def compute_streaming_mean_std(
     shards_dir: str,
     image_size: Union[int, Tuple[int, int]] = 224,
@@ -56,11 +57,14 @@ def compute_streaming_mean_std(
     for batch in tqdm(dataset, desc="Computing mean/std"):
         for img_tensor in batch:
             try:
-                if isinstance(img_tensor, torch.Tensor):
-                    img_np = img_tensor.permute(1, 2, 0).numpy()  # CHW to HWC
-                else:
-                    continue  # skip non-tensors
+                if not isinstance(img_tensor, torch.Tensor):
+                    continue
 
+                if img_tensor.ndim != 3 or img_tensor.shape[0] != 3:
+                    print(f"Skipping image with unexpected shape: {img_tensor.shape}")
+                    continue
+
+                img_np = img_tensor.permute(1, 2, 0).numpy()  # CHW to HWC
                 h, w, c = img_np.shape
                 n_pixels += h * w
 
@@ -74,6 +78,9 @@ def compute_streaming_mean_std(
                 print(f"Skipping image due to error: {e}")
         if processed >= max_images:
             break
+
+    if n_pixels == 0:
+        raise RuntimeError("No valid images processed. Please check your dataset and shard paths.")
 
     mean = channel_sum / n_pixels
     std = np.sqrt(channel_squared_sum / n_pixels - mean ** 2)
