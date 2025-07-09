@@ -29,10 +29,11 @@ def compute_streaming_mean_std(
     else:
         shards_for_node = all_shards
 
+    # Disable normalization for this transform
     tf = image_transform(
         image_size=image_size,
         is_train=False,
-        mean=None,  # disables normalization
+        mean=None,
         std=None,
         color_space=color_space,
         resize_mode="shortest",
@@ -54,8 +55,8 @@ def compute_streaming_mean_std(
     n_pixels = 0
     processed = 0
 
-    for batch in tqdm(dataset, desc="Computing mean/std"):
-        for img_tensor in batch:
+    for img_tensor_batch in tqdm(dataset, desc="Computing mean/std"):
+        for img_tensor in img_tensor_batch:
             try:
                 if not isinstance(img_tensor, torch.Tensor):
                     continue
@@ -79,8 +80,8 @@ def compute_streaming_mean_std(
         if processed >= max_images:
             break
 
-    if n_pixels == 0:
-        raise RuntimeError("No valid images processed. Please check your dataset and shard paths.")
+    if processed == 0 or n_pixels == 0:
+        raise RuntimeError("No valid images were processed.")
 
     mean = channel_sum / n_pixels
     std = np.sqrt(channel_squared_sum / n_pixels - mean ** 2)
