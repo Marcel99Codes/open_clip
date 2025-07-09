@@ -8,7 +8,7 @@ from typing import Union, Tuple
 import torch
 from torchvision.transforms.functional import InterpolationMode
 
-from transform import image_transform
+from open_clip.transform import image_transform
 
 def compute_streaming_mean_std(
     shards_dir: str,
