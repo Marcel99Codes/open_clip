@@ -29,7 +29,7 @@ def compute_streaming_mean_std(
     else:
         shards_for_node = all_shards
 
-    # Disable normalization for this transform
+    # Transform without normalization
     tf = image_transform(
         image_size=image_size,
         is_train=False,
@@ -55,30 +55,32 @@ def compute_streaming_mean_std(
     n_pixels = 0
     processed = 0
 
-    for img_tensor_batch in tqdm(dataset, desc="Computing mean/std"):
-        for img_tensor in img_tensor_batch:
-            try:
-                if not isinstance(img_tensor, torch.Tensor):
-                    continue
+    for batch in tqdm(dataset, desc="Computing mean/std"):
+        try:
+            if not isinstance(batch, torch.Tensor) and isinstance(batch, (tuple, list)):
+                batch = batch[0]
 
-                if img_tensor.ndim != 3 or img_tensor.shape[0] != 3:
-                    print(f"Skipping image with unexpected shape: {img_tensor.shape}")
-                    continue
+            if batch.ndim != 4 or batch.shape[1] != 3:
+                print(f"Skipping batch with unexpected shape: {batch.shape}")
+                continue
 
-                img_np = img_tensor.permute(1, 2, 0).numpy()  # CHW to HWC
-                h, w, c = img_np.shape
-                n_pixels += h * w
+            # batch shape: [B, 3, H, W] -> [B, H, W, 3]
+            batch_np = batch.permute(0, 2, 3, 1).numpy()
+            h, w = batch_np.shape[1:3]
+            pixels_in_batch = batch_np.shape[0] * h * w
 
-                channel_sum += img_np.sum(axis=(0, 1))
-                channel_squared_sum += (img_np ** 2).sum(axis=(0, 1))
+            channel_sum += batch_np.sum(axis=(0, 1, 2))
+            channel_squared_sum += (batch_np ** 2).sum(axis=(0, 1, 2))
 
-                processed += 1
-                if processed >= max_images:
-                    break
-            except Exception as e:
-                print(f"Skipping image due to error: {e}")
-        if processed >= max_images:
-            break
+            n_pixels += pixels_in_batch
+            processed += batch_np.shape[0]
+
+            if processed >= max_images:
+                break
+
+        except Exception as e:
+            print(f"Skipping batch due to error: {e}")
+            continue
 
     if processed == 0 or n_pixels == 0:
         raise RuntimeError("No valid images were processed.")
