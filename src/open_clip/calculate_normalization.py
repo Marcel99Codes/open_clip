@@ -54,30 +54,31 @@ def compute_streaming_mean_std(
     processed = 0
 
     for img_tensor_batch in tqdm(dataset, desc="Computing mean/std"):
-        for img_tensor in img_tensor_batch:
-            try:
-                if not isinstance(img_tensor, torch.Tensor):
-                    continue
+        try:
+            if not isinstance(img_tensor_batch, torch.Tensor):
+                continue
 
-                if img_tensor.ndim != 3 or img_tensor.shape[0] != 3:
-                    print(f"[WARNING] Skipping image with unexpected shape: {img_tensor.shape}")
-                    continue
+            if img_tensor_batch.ndim != 4 or img_tensor_batch.shape[1] != 3:
+                print(f"[WARNING] Skipping batch with unexpected shape: {img_tensor_batch.shape}")
+                continue
 
-                img_np = img_tensor.permute(1, 2, 0).numpy()  # [C,H,W] → [H,W,C]
-                h, w, c = img_np.shape
-                n_pixels += h * w
+            # Convert to numpy: [B,C,H,W] -> [B,H,W,C]
+            batch_np = img_tensor_batch.permute(0, 2, 3, 1).numpy()  
 
-                channel_sum += img_np.sum(axis=(0, 1))
-                channel_squared_sum += (img_np ** 2).sum(axis=(0, 1))
+            h, w = batch_np.shape[1], batch_np.shape[2]
+            n_pixels += h * w * batch_np.shape[0]
 
-                processed += 1
-                if processed >= max_images:
-                    break
-            except Exception as e:
-                print(f"[WARNING] Skipping image due to error: {e}")
+            channel_sum += batch_np.sum(axis=(0,1,2))
+            channel_squared_sum += (batch_np ** 2).sum(axis=(0,1,2))
+
+            processed += batch_np.shape[0]
+            if processed >= max_images:
+                break
+        except Exception as e:
+            print(f"[WARNING] Skipping batch due to error: {e}")
+
         if processed >= max_images:
             break
-
 
     if n_pixels == 0:
         raise ValueError("No valid images were processed.")
