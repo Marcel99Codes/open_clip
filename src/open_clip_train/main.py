@@ -223,11 +223,10 @@ def main(args):
 
 
     # Computing the mean and std for other colorspaces
-    if args.colorspace != 'rgb' and False:
-        print("[INFO] Computing dataset mean/std ...")
-        mean, std = compute_streaming_mean_std(args.shards_dir, color_space='hsv', max_images=100000)
-        print(f"Mean ({args.color_space.upper()}): {mean}")
-        print(f"Std ({args.color_space.upper()}): {std}")
+    if args.colorspace != 'rgb':
+        mean, std = load_normalization_stats(args.colorspace, "../open_clip/normalization")
+        print(f"Mean ({args.colorspace}): {mean}")
+        print(f"Std ({args.colorspace}): {std}")
         args.image_mean = mean
         args.image_std = std
 
@@ -563,6 +562,20 @@ def copy_codebase(args):
     copytree(current_code_path, new_code_path, ignore=ignore_patterns('log', 'logs', 'wandb'))
     print("Done copying code.")
     return 1
+
+import json
+import os
+def load_normalization_stats(color_space: str, base_path: str = "."):
+    filename = f"norm_{color_space.lower()}.json"
+    filepath = os.path.join(base_path, filename)
+
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Normalization file not found: {filepath}")
+
+    with open(filepath, "r") as f:
+        stats = json.load(f)
+
+    return stats["mean"], stats["std"]
 
 if __name__ == "__main__":
     main(sys.argv[1:])
