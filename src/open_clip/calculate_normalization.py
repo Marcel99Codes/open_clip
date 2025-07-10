@@ -53,35 +53,35 @@ def compute_streaming_mean_std(
     n_pixels = 0
     processed = 0
 
-    for img_tensor_batch in tqdm(dataset, desc="Computing mean/std"):
+    for batch in tqdm(dataset, desc="Computing mean/std"):
         try:
-            if not isinstance(img_tensor_batch, torch.Tensor):
+            if not isinstance(batch, torch.Tensor) and isinstance(batch, (tuple, list)):
+                batch = batch[0]
+
+            if batch.ndim != 4 or batch.shape[1] != 3:
+                print(f"Skipping batch with unexpected shape: {batch.shape}")
                 continue
 
-            if img_tensor_batch.ndim != 4 or img_tensor_batch.shape[1] != 3:
-                print(f"[WARNING] Skipping batch with unexpected shape: {img_tensor_batch.shape}")
-                continue
+            # batch shape: [B, 3, H, W] -> [B, H, W, 3]
+            batch_np = batch.permute(0, 2, 3, 1).numpy()
+            h, w = batch_np.shape[1:3]
+            pixels_in_batch = batch_np.shape[0] * h * w
 
-            # Convert to numpy: [B,C,H,W] -> [B,H,W,C]
-            batch_np = img_tensor_batch.permute(0, 2, 3, 1).numpy()  
+            channel_sum += batch_np.sum(axis=(0, 1, 2))
+            channel_squared_sum += (batch_np ** 2).sum(axis=(0, 1, 2))
 
-            h, w = batch_np.shape[1], batch_np.shape[2]
-            n_pixels += h * w * batch_np.shape[0]
-
-            channel_sum += batch_np.sum(axis=(0,1,2))
-            channel_squared_sum += (batch_np ** 2).sum(axis=(0,1,2))
-
+            n_pixels += pixels_in_batch
             processed += batch_np.shape[0]
+
             if processed >= max_images:
                 break
+
         except Exception as e:
-            print(f"[WARNING] Skipping batch due to error: {e}")
+            print(f"Skipping batch due to error: {e}")
+            continue
 
-        if processed >= max_images:
-            break
-
-    if n_pixels == 0:
-        raise ValueError("No valid images were processed.")
+    if processed == 0 or n_pixels == 0:
+        raise RuntimeError("No valid images were processed.")
 
     mean = channel_sum / n_pixels
     std = np.sqrt(channel_squared_sum / n_pixels - mean ** 2)
