@@ -40,42 +40,30 @@ def compute_streaming_mean_std(
         aug_cfg=None,
     )
 
-    dataset = (
-        wds.WebDataset(shards_for_node)
+    dataset = (wds.WebDataset(shards_for_node)
         .shuffle(1000)
         .decode("pil")
         .to_tuple("jpg")
+        .map_tuple(tf)
         .batched(batch_size)
-        .map_tuple(lambda imgs: torch.stack([tf(img) for img in imgs]))
     )
 
-    channel_sum = None
-    channel_squared_sum = None
+    channel_sum = np.zeros(3, dtype=np.float64)
+    channel_squared_sum = np.zeros(3, dtype=np.float64)
     n_pixels = 0
     processed = 0
 
-    for batch in tqdm(dataset, desc="Computing mean/std"):
-        try:
-            if isinstance(batch, torch.Tensor):
-                # Single batched tensor from WebDataset
-                images = batch
-            elif isinstance(batch, (list, tuple)) and isinstance(batch[0], torch.Tensor):
-                images = torch.stack(batch)
-            else:
-                print(f"[WARNING] Unexpected batch type: {type(batch)}")
-                continue
+    for img_tensor_batch in tqdm(dataset, desc="Computing mean/std"):
+        for img_tensor in img_tensor_batch:
+            try:
+                if not isinstance(img_tensor, torch.Tensor):
+                    continue
 
-            if images.ndim != 4 or images.shape[1] != 3:
-                print(f"[WARNING] Skipping batch with shape: {images.shape}")
-                continue
+                if img_tensor.ndim != 3 or img_tensor.shape[0] != 3:
+                    print(f"[WARNING] Skipping image with unexpected shape: {img_tensor.shape}")
+                    continue
 
-            for img_tensor in images:
-                img_np = img_tensor.permute(1, 2, 0).numpy()  # [H, W, C]
-
-                if channel_sum is None:
-                    channel_sum = np.zeros(img_np.shape[2], dtype=np.float64)
-                    channel_squared_sum = np.zeros(img_np.shape[2], dtype=np.float64)
-
+                img_np = img_tensor.permute(1, 2, 0).numpy()  # [C,H,W] → [H,W,C]
                 h, w, c = img_np.shape
                 n_pixels += h * w
 
@@ -85,11 +73,11 @@ def compute_streaming_mean_std(
                 processed += 1
                 if processed >= max_images:
                     break
-
-        except Exception as e:
-            print(f"[ERROR] Skipping batch due to error: {e}")
+            except Exception as e:
+                print(f"[WARNING] Skipping image due to error: {e}")
         if processed >= max_images:
             break
+
 
     if n_pixels == 0:
         raise ValueError("No valid images were processed.")
