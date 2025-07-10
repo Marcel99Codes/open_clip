@@ -45,8 +45,8 @@ def compute_streaming_mean_std(
         .shuffle(1000)
         .decode("pil")
         .to_tuple("jpg")
-        .map_tuple(tf)
         .batched(batch_size)
+        .map_tuple(lambda imgs: torch.stack([tf(img) for img in imgs]))
     )
 
     channel_sum = None
