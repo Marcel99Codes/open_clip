@@ -224,7 +224,7 @@ def main(args):
 
     # Computing the mean and std for other colorspaces
     if args.colorspace != 'rgb':
-        mean, std = load_normalization_stats(args.colorspace, "../open_clip/normalization")
+        mean, std = load_normalization_stats(args.colorspace, "../normalization")
         print(f"Mean ({args.colorspace}): {mean}")
         print(f"Std ({args.colorspace}): {std}")
         args.image_mean = mean
