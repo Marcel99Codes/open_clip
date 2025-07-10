@@ -55,35 +55,39 @@ def compute_streaming_mean_std(
     processed = 0
 
     for batch in tqdm(dataset, desc="Computing mean/std"):
-        if not isinstance(batch, (list, tuple)):
-            continue
-        for img_tensor in batch:
-            try:
-                if isinstance(img_tensor, torch.Tensor):
-                    if img_tensor.ndim == 3:
-                        pass  # Single image: [C, H, W]
-                    elif img_tensor.ndim == 4:
-                        raise ValueError(f"Unexpected batch image shape: {img_tensor.shape}")
-                    else:
-                        continue
+        try:
+            if isinstance(batch, torch.Tensor):
+                # Single batched tensor from WebDataset
+                images = batch
+            elif isinstance(batch, (list, tuple)) and isinstance(batch[0], torch.Tensor):
+                images = torch.stack(batch)
+            else:
+                print(f"[WARNING] Unexpected batch type: {type(batch)}")
+                continue
 
-                    img_np = img_tensor.permute(1, 2, 0).numpy()  # [H, W, C]
+            if images.ndim != 4 or images.shape[1] != 3:
+                print(f"[WARNING] Skipping batch with shape: {images.shape}")
+                continue
 
-                    if channel_sum is None:
-                        channel_sum = np.zeros(img_np.shape[2], dtype=np.float64)
-                        channel_squared_sum = np.zeros(img_np.shape[2], dtype=np.float64)
+            for img_tensor in images:
+                img_np = img_tensor.permute(1, 2, 0).numpy()  # [H, W, C]
 
-                    h, w, c = img_np.shape
-                    n_pixels += h * w
+                if channel_sum is None:
+                    channel_sum = np.zeros(img_np.shape[2], dtype=np.float64)
+                    channel_squared_sum = np.zeros(img_np.shape[2], dtype=np.float64)
 
-                    channel_sum += img_np.sum(axis=(0, 1))
-                    channel_squared_sum += (img_np ** 2).sum(axis=(0, 1))
+                h, w, c = img_np.shape
+                n_pixels += h * w
 
-                    processed += 1
-                    if processed >= max_images:
-                        break
-            except Exception as e:
-                print(f"Skipping image due to error: {e}")
+                channel_sum += img_np.sum(axis=(0, 1))
+                channel_squared_sum += (img_np ** 2).sum(axis=(0, 1))
+
+                processed += 1
+                if processed >= max_images:
+                    break
+
+        except Exception as e:
+            print(f"[ERROR] Skipping batch due to error: {e}")
         if processed >= max_images:
             break
 
@@ -99,6 +103,7 @@ def compute_streaming_mean_std(
     if save_path is None:
         save_path = f"./normalization/norm_{color_space}.json"
 
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
     with open(save_path, "w") as f:
         json.dump({"mean": mean.tolist(), "std": std.tolist()}, f, indent=2)
         print(f"[INFO] Saved normalization stats to {save_path}")
