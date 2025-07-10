@@ -311,13 +311,15 @@ def image_transform(
 ):  
     if mean is None and color_space.lower() == "rgb":
         mean = OPENAI_DATASET_MEAN
-    if not isinstance(mean, (list, tuple)):
-        mean = (mean,) * 3
+    if mean is not None:
+        if not isinstance(mean, (list, tuple)):
+            mean = (mean,) * 3
 
     if std is None and color_space.lower() == "rgb":
         std = OPENAI_DATASET_STD
-    if not isinstance(std, (list, tuple)):
-        std = (std,) * 3
+    if std is not None:
+        if not isinstance(std, (list, tuple)):
+            std = (std,) * 3
 
     interpolation = interpolation or 'bicubic'
     assert interpolation in ['bicubic', 'bilinear', 'random']
