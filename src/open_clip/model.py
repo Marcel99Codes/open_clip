@@ -22,7 +22,7 @@ from .transformer import LayerNormFp32, LayerNorm, QuickGELU, Attention, VisionT
     text_global_pool
 from .utils import to_2tuple
 
-from open_clip.utils import transformer_args
+from open_clip import transformer_args
 
 
 @dataclass
