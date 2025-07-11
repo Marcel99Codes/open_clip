@@ -548,7 +548,7 @@ class VisionTransformer(nn.Module):
         self.final_ln_after_pool = final_ln_after_pool  # currently ignored w/ attn pool enabled
         self.output_dim = output_dim
 
-        color_space_tokenization = transformer_args.tokenization_pipeline
+        color_space_tokenization = transformer_args.get_tokenization_pipeline()
 
         if color_space_tokenization == "single":
             self.embeds = self._embeds
@@ -562,8 +562,8 @@ class VisionTransformer(nn.Module):
         self.conv1 = nn.Conv2d(
             in_channels=3,
             out_channels=width,
-            kernel_size=transformer_args.conv1_patch_size,
-            stride=transformer_args.conv1_patch_size,
+            kernel_size=transformer_args.get_conv1_patch_size(),
+            stride=transformer_args.get_conv1_patch_size(),
             bias=False,
         )
 
@@ -578,8 +578,8 @@ class VisionTransformer(nn.Module):
         self.conv_b = nn.Conv2d(
             in_channels=2,
             out_channels=width,
-            kernel_size=transformer_args.convb_patch_size,
-            stride=transformer_args.convb_patch_size,
+            kernel_size=transformer_args.get_convb_patch_size(),
+            stride=transformer_args.get_convb_patch_size(),
             bias=False,
         )
 

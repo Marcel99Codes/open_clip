@@ -72,7 +72,7 @@ def get_latest_checkpoint(path: str, remote : bool):
 def main(args):
     args = parse_args(args)
 
-    transformer_args.add_transformer_args(
+    transformer_args.set_transformer_args(
         args.tokenization_pipeline,
         args.conv1_patch_size,
         args.convb_patch_size,
