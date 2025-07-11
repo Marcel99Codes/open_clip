@@ -555,9 +555,9 @@ class VisionTransformer(nn.Module):
 
         if color_space_tokenization == "single":
             self.embeds = self._embeds
-        elif color_space_tokenization == "shape1":
+        elif color_space_tokenization == "dual_c1":
             self.embeds = self._embeds_single_channel1
-        elif color_space_tokenization == "shape3":
+        elif color_space_tokenization == "dual_c3":
             self.embeds = self._embeds_single_channel3
         else:
             raise NotImplementedError("Unkown colorspace for the tokenization-pipeline")
