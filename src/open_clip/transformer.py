@@ -771,10 +771,16 @@ class VisionTransformer(nn.Module):
         if pos_embed.ndim == 2:
             pos_embed = pos_embed.unsqueeze(0)  
         pos_tokens = pos_embed[:, 1:, :]                    # (1, grid², width)
+
+        pos_embed2 = self.positional_embedding2.to(x.dtype)   # possibly (grid² + 1, width)
+        if pos_embed2.ndim == 2:
+            pos_embed2 = pos_embed2.unsqueeze(0)  
+        pos_tokens2 = pos_embed2[:, 1:, :]                    # (1, grid², width)
+
         pos_cls = pos_embed[:, :1, :]                       # (1, 1, width)
 
         tokens_shape = tokens_shape + pos_tokens  # (B, grid², width)
-        tokens_color = tokens_color + pos_tokens  # (B, grid², width)
+        tokens_color = tokens_color + pos_tokens2  # (B, grid², width)
 
         # Concatenate token sets → (B, 2×grid², width)
         x_tokens = torch.cat([tokens_shape, tokens_color], dim=1)
