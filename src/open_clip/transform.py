@@ -320,11 +320,11 @@ def image_transform(
     if color_space.lower() == "rgb":
         _convert_function = lambda x: x # Identity function
     elif color_space.lower() == "ycbcr":
-        _convert_function = _convert_to_ycbcr()
+        _convert_function = _convert_to_ycbcr
     elif color_space.lower() == "hsv":
-        _convert_function = _convert_to_hsv()
+        _convert_function = _convert_to_hsv
     elif color_space.lower() == "lab":
-        _convert_function = _convert_to_lab()
+        _convert_function = _convert_to_lab
     else:
         raise NotImplementedError()
     
