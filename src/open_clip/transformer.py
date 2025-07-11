@@ -521,6 +521,7 @@ class VisionTransformer(nn.Module):
             self,
             image_size: int,
             patch_size: int,
+            patch_size2: int,
             width: int,
             layers: int,
             heads: int,
@@ -544,7 +545,9 @@ class VisionTransformer(nn.Module):
         self.output_tokens = output_tokens
         image_height, image_width = self.image_size = to_2tuple(image_size)
         patch_height, patch_width = self.patch_size = to_2tuple(patch_size)
+        patch2_height, patch2_width = self.patch_size2 = to_2tuple(patch_size2)
         self.grid_size = (image_height // patch_height, image_width // patch_width)
+        self.grid_size2 = (image_height // patch2_height, image_width // patch2_width)
         self.final_ln_after_pool = final_ln_after_pool  # currently ignored w/ attn pool enabled
         self.output_dim = output_dim
 
@@ -562,8 +565,8 @@ class VisionTransformer(nn.Module):
         self.conv1 = nn.Conv2d(
             in_channels=3,
             out_channels=width,
-            kernel_size=transformer_args.get_conv1_patch_size(),
-            stride=transformer_args.get_conv1_patch_size(),
+            kernel_size=patch_size,
+            stride=patch_size,
             bias=False,
         )
 
@@ -578,8 +581,8 @@ class VisionTransformer(nn.Module):
         self.conv_b = nn.Conv2d(
             in_channels=2,
             out_channels=width,
-            kernel_size=transformer_args.get_convb_patch_size(),
-            stride=transformer_args.get_convb_patch_size(),
+            kernel_size=patch_size2,
+            stride=patch_size2,
             bias=False,
         )
 
@@ -589,7 +592,9 @@ class VisionTransformer(nn.Module):
         if pos_embed_type == 'learnable':
             self.positional_embedding = nn.Parameter(
                 scale * torch.randn(self.grid_size[0] * self.grid_size[1] + 1, width))
-        elif pos_embed_type == 'sin_cos_2d':
+            self.positional_embedding2 = nn.Parameter(
+                scale * torch.randn(self.grid_size2[0] * self.grid_size2[1] + 1, width))
+        elif pos_embed_type == 'sin_cos_2d' and False:
             # fixed sin-cos embedding
             assert self.grid_size[0] == self.grid_size[1],\
                 'currently sin cos 2d pos embedding only supports square input'
@@ -804,10 +809,16 @@ class VisionTransformer(nn.Module):
         if pos_embed.ndim == 2:
             pos_embed = pos_embed.unsqueeze(0)  
         pos_tokens = pos_embed[:, 1:, :]                    # (1, grid², width)
+
+        pos_embed2 = self.positional_embedding2.to(x.dtype)   # possibly (grid² + 1, width)
+        if pos_embed2.ndim == 2:
+            pos_embed2 = pos_embed2.unsqueeze(0)  
+        pos_tokens2 = pos_embed2[:, 1:, :]                    # (1, grid², width)
+
         pos_cls = pos_embed[:, :1, :]                       # (1, 1, width)
 
         tokens_shape = tokens_shape + pos_tokens  # (B, grid², width)
-        tokens_color = tokens_color + pos_tokens  # (B, grid², width)
+        tokens_color = tokens_color + pos_tokens2  # (B, grid², width)
 
         # Concatenate token sets → (B, 2×grid², width)
         x_tokens = torch.cat([tokens_shape, tokens_color], dim=1)

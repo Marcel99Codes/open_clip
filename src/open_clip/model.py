@@ -22,6 +22,8 @@ from .transformer import LayerNormFp32, LayerNorm, QuickGELU, Attention, VisionT
     text_global_pool
 from .utils import to_2tuple
 
+from open_clip.utils import transformer_args
+
 
 @dataclass
 class CLIPVisionCfg:
@@ -30,6 +32,7 @@ class CLIPVisionCfg:
     head_width: int = 64
     mlp_ratio: float = 4.0
     patch_size: int = 16
+    patch_size2: int = 16
     image_size: Union[Tuple[int, int], int] = 224
 
     ls_init_value: Optional[float] = None  # layer scale initial value
@@ -149,6 +152,7 @@ def _build_vision_tower(
         visual = VisionTransformer(
             image_size=vision_cfg.image_size,
             patch_size=vision_cfg.patch_size,
+            patch_size2=vision_cfg.patch_size2,
             width=vision_cfg.width,
             layers=vision_cfg.layers,
             heads=vision_heads,
@@ -697,10 +701,13 @@ def build_model_from_openai_state_dict(
     transformer_heads = transformer_width // 64
     transformer_layers = len(set(k.split(".")[2] for k in state_dict if k.startswith(f"transformer.resblocks")))
 
+    vision_patch_size = transformer_args.get_conv1_patch_size()
+
     vision_cfg = CLIPVisionCfg(
         layers=vision_layers,
         width=vision_width,
-        patch_size=vision_patch_size,
+        patch_size=transformer_args.get_conv1_patch_size(),
+        patch_size2=transformer_args.get_convb_patch_size(),
         image_size=image_size,
     )
     text_cfg = CLIPTextCfg(
