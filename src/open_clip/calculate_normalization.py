@@ -19,7 +19,6 @@ def compute_streaming_mean_std(
     batch_size: int = 64,
     save_path: str = None,
 ):
-    # Distributed setup
     node_rank = int(os.environ.get("RANK", 0))
     num_nodes = int(os.environ.get("WORLD_SIZE", 1))
 
@@ -32,7 +31,7 @@ def compute_streaming_mean_std(
     tf = image_transform(
         image_size=image_size,
         is_train=False,
-        mean=None,  # No normalization
+        mean=None,
         std=None,
         color_space=color_space,
         resize_mode="shortest",
@@ -48,43 +47,40 @@ def compute_streaming_mean_std(
         .batched(batch_size)
     )
 
-    channel_sum = np.zeros(3, dtype=np.float64)
-    channel_squared_sum = np.zeros(3, dtype=np.float64)
+    sum = torch.zeros(3, dtype=torch.float64)
+    squared_sum = torch.zeros(3, dtype=torch.float64)
     n_pixels = 0
     processed = 0
 
     for batch in tqdm(dataset, desc="Computing mean/std"):
-        try:
-            if not isinstance(batch, torch.Tensor) and isinstance(batch, (tuple, list)):
-                batch = batch[0]
+        if isinstance(batch, (tuple, list)):
+            batch = batch[0]
 
-            if batch.ndim != 4 or batch.shape[1] != 3:
-                print(f"Skipping batch with unexpected shape: {batch.shape}")
-                continue
-
-            # batch shape: [B, 3, H, W] -> [B, H, W, 3]
-            batch_np = batch.permute(0, 2, 3, 1).numpy()
-            h, w = batch_np.shape[1:3]
-            pixels_in_batch = batch_np.shape[0] * h * w
-
-            channel_sum += batch_np.sum(axis=(0, 1, 2))
-            channel_squared_sum += (batch_np ** 2).sum(axis=(0, 1, 2))
-
-            n_pixels += pixels_in_batch
-            processed += batch_np.shape[0]
-
-            if processed >= max_images:
-                break
-
-        except Exception as e:
-            print(f"Skipping batch due to error: {e}")
+        # Expect shape [B, 3, H, W]
+        if batch.ndim != 4 or batch.shape[1] != 3:
+            print(f"Skipping batch with unexpected shape: {batch.shape}")
             continue
+
+        batch = batch.to(torch.float32)
+
+        sum += batch.sum( dim=(0, 2, 3), dtype=torch.float64 )
+        squared_sum += (batch**2).sum( dim=(0, 2, 3), dtype=torch.float64 )
+
+        n_pixels += batch.shape[0] * batch.shape[2] * batch.shape[3]
+        processed += batch.shape[0]
+
+        if processed >= max_images:
+            break
 
     if processed == 0 or n_pixels == 0:
         raise RuntimeError("No valid images were processed.")
 
-    mean = channel_sum / n_pixels
-    std = np.sqrt(channel_squared_sum / n_pixels - mean ** 2)
+    mean = sum / n_pixels
+    std = torch.sqrt((squared_sum - (sum**2) / n_pixels) / (n_pixels - 1))
+
+    print("Mean :", mean.tolist())
+    print("Std  :", std.tolist())
+
 
     print(f"\n[RESULT] Dataset mean ({color_space}): {mean.tolist()}")
     print(f"[RESULT] Dataset std  ({color_space}): {std.tolist()}")

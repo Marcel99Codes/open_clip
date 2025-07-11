@@ -725,7 +725,7 @@ class VisionTransformer(nn.Module):
         return pooled, tokens
 
     def _embeds(self, x:torch.Tensor) -> torch.Tensor:
-        print(f"[DEBUG] RGB input range: min={x.min().item():.4f}, max={x.max().item():.4f}")
+        print(f"[DEBUG] Colorspace input range: min={x.min().item():.4f}, max={x.max().item():.4f}")
 
         x = self.conv1(x)  # shape = [*, dim, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]

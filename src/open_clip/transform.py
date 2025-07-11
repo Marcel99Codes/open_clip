@@ -238,33 +238,15 @@ class CenterCropOrPad(torch.nn.Module):
 def _convert_to_rgb(image):
     return image.convert('RGB')
 
-# def _convert_to_ycbcr(image):
-#     return image.convert('YCbCr')
+def _convert_to_ycbcr(image):
+    return image.convert('YCbCr')
 
-import cv2
-import numpy as np
-from PIL import Image
+def _convert_to_hsv(image):
+    return image.convert('HSV')
 
-class ConvertToHsv:
-    def __call__(self, img):
-        if isinstance(img, Image.Image):
-            img = np.array(img)
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-        return Image.fromarray(img)
-    
-class ConvertToYcbcr:
-    def __call__(self, img):
-        if isinstance(img, Image.Image):
-            img = np.array(img)
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)
-        return Image.fromarray(img)
-    
-class ConvertToLab:
-    def __call__(self, img):
-        if isinstance(img, Image.Image):
-            img = np.array(img)
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
-        return Image.fromarray(img)
+def _convert_to_lab(image):
+    return image.convert('LAB')
+
 
 class color_jitter(object):
     """
@@ -337,33 +319,20 @@ def image_transform(
     #Convert image to colorspace
     if color_space.lower() == "rgb":
         _convert_function = lambda x: x # Identity function
-        if mean is None or std is None:
-            normalize = lambda x: x
-        else:
-            normalize = Normalize(mean=mean, std=std)
     elif color_space.lower() == "ycbcr":
-        _convert_function = ConvertToYcbcr()
-        if mean is None or std is None:
-            normalize = lambda x: x
-        else:
-            normalize = Normalize(mean=mean, std=std)
+        _convert_function = _convert_to_ycbcr()
     elif color_space.lower() == "hsv":
-        _convert_function = ConvertToHsv()
-        if mean is None or std is None:
-            normalize = lambda x: x
-        else:
-            normalize = Normalize(mean=mean, std=std)
+        _convert_function = _convert_to_hsv()
     elif color_space.lower() == "lab":
-        _convert_function = ConvertToLab()
-        if mean is None or std is None:
-            normalize = lambda x: x
-        else:
-            normalize = Normalize(mean=mean, std=std)
+        _convert_function = _convert_to_lab()
     else:
         raise NotImplementedError()
     
-    #Print the mean and std value
     print(f"[DEBUG] Normalized mean={mean}, std={std}")
+    if mean is None or std is None:
+        normalize = lambda x: x
+    else:
+        normalize = Normalize(mean=mean, std=std)
 
     if is_train:
         aug_cfg_dict = {k: v for k, v in asdict(aug_cfg).items() if v is not None}
