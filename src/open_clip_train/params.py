@@ -493,7 +493,21 @@ def parse_args(args):
         type=str,
         default='single',
         choices=['single', 'dual_c1', 'dual_c3'],
-        help='Tokenization pipeline to use for vision preprocessing. '
+        help='Tokenization pipeline to use for vision preprocessing.'
+    )
+
+    parser.add_argument(
+        '--conv1_patch_size',
+        type=int,
+        default=16,
+        help='Kernel size and stride for the convolutional layers in the vision tower.'
+    )
+
+    parser.add_argument(
+        '--convb_patch_size',
+        type=int,
+        default=16,
+        help='Kernel size snd stride for the convolutional layers in the vision tower.'
     )
 
     args = parser.parse_args(args)

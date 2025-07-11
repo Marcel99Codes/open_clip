@@ -13,6 +13,7 @@ import numpy as np
 import torch
 from torch import optim
 
+from open_clip import transformer_args
 try:
     import wandb
 except ImportError:
@@ -70,6 +71,12 @@ def get_latest_checkpoint(path: str, remote : bool):
 
 def main(args):
     args = parse_args(args)
+
+    transformer_args.add_transformer_args(
+        args.tokenization_pipeline,
+        args.conv1_patch_size,
+        args.convb_patch_size,
+    )
 
     if torch.cuda.is_available():
         # This enables tf32 on Ampere GPUs which is only 8% slower than
