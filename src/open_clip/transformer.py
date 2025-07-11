@@ -10,6 +10,8 @@ from torch.utils.checkpoint import checkpoint
 from .utils import to_2tuple, feature_take_indices
 from .pos_embed import get_2d_sincos_pos_embed
 
+from open_clip_train import params
+
 
 class LayerNormFp32(nn.LayerNorm):
     """Subclass torch's LayerNorm to handle fp16 (by casting to float32 and back)."""
@@ -536,7 +538,6 @@ class VisionTransformer(nn.Module):
             act_layer: Callable = nn.GELU,
             norm_layer: Callable = LayerNorm,
             output_tokens: bool = False,
-            color_space_tokenization: str = "single"
     ):
         super().__init__()
         assert pool_type in ('tok', 'avg', 'none')
@@ -546,6 +547,8 @@ class VisionTransformer(nn.Module):
         self.grid_size = (image_height // patch_height, image_width // patch_width)
         self.final_ln_after_pool = final_ln_after_pool  # currently ignored w/ attn pool enabled
         self.output_dim = output_dim
+
+        color_space_tokenization = params.args.tokenization_pipeline
 
         if color_space_tokenization == "single":
             self.embeds = self._embeds

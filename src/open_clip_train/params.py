@@ -489,10 +489,11 @@ def parse_args(args):
     )
 
     parser.add_argument(
-        '--shards_dir',
+        '--tokenization_pipeline',
         type=str,
-        default='/data1/marcel/clip_training/data/shards',
-        help='Path to the dataset shards for computing the mean and std'
+        default='single',
+        choices=['single', 'dual_c1', 'dual_c3'],
+        help='Tokenization pipeline to use for vision preprocessing. '
     )
 
     args = parser.parse_args(args)
