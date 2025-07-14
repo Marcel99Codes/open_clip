@@ -543,8 +543,9 @@ class VisionTransformer(nn.Module):
         super().__init__()
         assert pool_type in ('tok', 'avg', 'none')
 
-        print(f"[DEBUG] Conv1/a patch_size (kernel, stride)={patch_size}")
-        print(f"[DEBUG] Conv_b patch_size (kernel, stride)={patch_size2}")
+        color_space_tokenization = transformer_args.get_tokenization_pipeline()
+        patch_size = transformer_args.get_conv1_patch_size()
+        patch_size2 = transformer_args.get_convb_patch_size()
 
         self.output_tokens = output_tokens
         image_height, image_width = self.image_size = to_2tuple(image_size)
@@ -554,8 +555,6 @@ class VisionTransformer(nn.Module):
         self.grid_size2 = (image_height // patch2_height, image_width // patch2_width)
         self.final_ln_after_pool = final_ln_after_pool  # currently ignored w/ attn pool enabled
         self.output_dim = output_dim
-
-        color_space_tokenization = transformer_args.get_tokenization_pipeline()
 
         print(f"[DEBUG] Selected tokenization pipeline={color_space_tokenization}, ")
         print(f"[DEBUG] Conv1/a patch_size (kernel, stride)={patch_size}, patch_height={patch_height}, patch_width={patch_width}")
