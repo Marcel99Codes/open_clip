@@ -542,6 +542,11 @@ class VisionTransformer(nn.Module):
     ):
         super().__init__()
         assert pool_type in ('tok', 'avg', 'none')
+
+        print(f"[DEBUG] Selected tokenization pipeline={color_space_tokenization}, ")
+        print(f"[DEBUG] Conv1/a patch_size (kernel, stride)={patch_size}, patch_height={patch_height}, patch_width={patch_width}")
+        print(f"[DEBUG] Conv_b patch_size (kernel, stride)={patch_size2}, patch_height={patch2_height}, patch_width={patch2_width}")
+
         self.output_tokens = output_tokens
         image_height, image_width = self.image_size = to_2tuple(image_size)
         patch_height, patch_width = self.patch_size = to_2tuple(patch_size)
@@ -585,11 +590,6 @@ class VisionTransformer(nn.Module):
             stride=patch_size2,
             bias=False,
         )
-
-        print(f"[DEBUG] Selected tokenization pipeline={color_space_tokenization}, ")
-        print(f"[DEBUG] Conv1/a patch_size (kernel, stride)={patch_size}, patch_height={patch_height}, patch_width={patch_width}")
-        print(f"[DEBUG] Conv_b patch_size (kernel, stride)={patch_size2}, patch_height={patch2_height}, patch_width={patch2_width}")
-
 
         # class embeddings and positional embeddings
         scale = width ** -0.5
