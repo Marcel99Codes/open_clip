@@ -543,7 +543,6 @@ class VisionTransformer(nn.Module):
         super().__init__()
         assert pool_type in ('tok', 'avg', 'none')
 
-        print(f"[DEBUG] Selected tokenization pipeline={color_space_tokenization}, ")
         print(f"[DEBUG] Conv1/a patch_size (kernel, stride)={patch_size}, patch_height={patch_height}, patch_width={patch_width}")
         print(f"[DEBUG] Conv_b patch_size (kernel, stride)={patch_size2}, patch_height={patch2_height}, patch_width={patch2_width}")
 
@@ -557,6 +556,8 @@ class VisionTransformer(nn.Module):
         self.output_dim = output_dim
 
         color_space_tokenization = transformer_args.get_tokenization_pipeline()
+        print(f"[DEBUG] Selected tokenization pipeline={color_space_tokenization}, ")
+
 
         if color_space_tokenization == "single":
             self.embeds = self._embeds
