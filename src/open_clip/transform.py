@@ -328,7 +328,9 @@ def image_transform(
     else:
         raise NotImplementedError()
     
+    print(f"[DEBUG] Selected colorspace={color_space}")
     print(f"[DEBUG] Normalized mean={mean}, std={std}")
+    
     if mean is None or std is None:
         normalize = lambda x: x
     else:

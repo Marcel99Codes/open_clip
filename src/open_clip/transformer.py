@@ -586,6 +586,11 @@ class VisionTransformer(nn.Module):
             bias=False,
         )
 
+        print(f"[DEBUG] Selected tokenization pipeline={color_space_tokenization}, ")
+        print(f"[DEBUG] Conv1/a patch_size (kernel, stride)={patch_size}, ")
+        print(f"[DEBUG] Conv_b patch_size (kernel, stride)={patch_size2}, ")
+
+
         # class embeddings and positional embeddings
         scale = width ** -0.5
         self.class_embedding = nn.Parameter(scale * torch.randn(width))
@@ -733,8 +738,6 @@ class VisionTransformer(nn.Module):
         return pooled, tokens
 
     def _embeds(self, x:torch.Tensor) -> torch.Tensor:
-        print(f"[DEBUG] Colorspace input range: min={x.min().item():.4f}, max={x.max().item():.4f}")
-
         x = self.conv1(x)  # shape = [*, dim, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
@@ -752,8 +755,6 @@ class VisionTransformer(nn.Module):
         return x
     
     def _embeds_single_channel1(self, x: torch.Tensor) -> torch.Tensor:
-        print(f"[DEBUG] Colorspace input range: min={x.min().item():.4f}, max={x.max().item():.4f}")
-
         # Split shape and color channels
         c_shape = x[:, 0:1, :, :]   # (B, 1, H, W)
         c_color = x[:, 1:3, :, :]    # (B, 2, H, W)
@@ -796,8 +797,6 @@ class VisionTransformer(nn.Module):
         return x_tokens
     
     def _embeds_single_channel3(self, x: torch.Tensor, singel_channel=1) -> torch.Tensor:
-        print(f"[DEBUG] Colorspace input range: min={x.min().item():.4f}, max={x.max().item():.4f}")
-
         # Split shape and color channels
         c_color = x[:, 0:2, :, :]    # (B, 2, H, W)
         c_shape = x[:, 2:3, :, :]   # (B, 1, H, W)
