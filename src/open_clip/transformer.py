@@ -587,8 +587,8 @@ class VisionTransformer(nn.Module):
         )
 
         print(f"[DEBUG] Selected tokenization pipeline={color_space_tokenization}, ")
-        print(f"[DEBUG] Conv1/a patch_size (kernel, stride)={patch_size}, ")
-        print(f"[DEBUG] Conv_b patch_size (kernel, stride)={patch_size2}, ")
+        print(f"[DEBUG] Conv1/a patch_size (kernel, stride)={patch_size}, patch_height={patch_height}, patch_width={patch_width}")
+        print(f"[DEBUG] Conv_b patch_size (kernel, stride)={patch_size2}, patch_height={patch2_height}, patch_width={patch2_width}")
 
 
         # class embeddings and positional embeddings
