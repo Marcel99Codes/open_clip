@@ -149,6 +149,9 @@ def _build_vision_tower(
         if vision_cfg.act_kwargs is not None:
             act_layer = partial(act_layer, **vision_cfg.act_kwargs)
 
+        print(f"[DEBUG] Conv1/a patch_size (kernel, stride)={vision_cfg.patch_size}, ")
+        print(f"[DEBUG] Conv_b patch_size (kernel, stride)={vision_cfg.patch_size2}, ")
+
         visual = VisionTransformer(
             image_size=vision_cfg.image_size,
             patch_size=vision_cfg.patch_size,
