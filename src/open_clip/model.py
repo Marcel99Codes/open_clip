@@ -31,8 +31,8 @@ class CLIPVisionCfg:
     width: int = 768
     head_width: int = 64
     mlp_ratio: float = 4.0
-    patch_size: int = 16
-    patch_size2: int = 16
+    patch_size: int = transformer_args.get_conv1_patch_size
+    patch_size2: int = transformer_args.get_convb_patch_size
     image_size: Union[Tuple[int, int], int] = 224
 
     ls_init_value: Optional[float] = None  # layer scale initial value
