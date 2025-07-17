@@ -785,8 +785,11 @@ class VisionTransformer(nn.Module):
         tokens_shape = tokens_shape + pos_tokens  # (B, grid², width)
         tokens_color = tokens_color + pos_tokens2  # (B, grid², width)
 
-        # Concatenate token sets → (B, 2×grid², width)
-        x_tokens = torch.cat([tokens_shape, tokens_color], dim=1)
+        # Concatenate token sets → (B, grid², width)
+        if transformer_args.get_grayscale_only():
+            x_tokens = tokens_shape
+        else:
+            x_tokens = torch.cat([tokens_shape, tokens_color], dim=1)
 
         # Add class token
         cls_token = _expand_token(self.class_embedding, x.shape[0]).to(x.dtype) + pos_cls
@@ -827,8 +830,11 @@ class VisionTransformer(nn.Module):
         tokens_shape = tokens_shape + pos_tokens  # (B, grid², width)
         tokens_color = tokens_color + pos_tokens2  # (B, grid², width)
 
-        # Concatenate token sets → (B, 2×grid², width)
-        x_tokens = torch.cat([tokens_shape, tokens_color], dim=1)
+        # Concatenate token sets → (B, grid², width)
+        if transformer_args.get_grayscale_only():
+            x_tokens = tokens_shape
+        else:
+            x_tokens = torch.cat([tokens_shape, tokens_color], dim=1)
 
         # Add class token
         cls_token = _expand_token(self.class_embedding, x.shape[0]).to(x.dtype) + pos_cls

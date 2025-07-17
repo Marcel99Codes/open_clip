@@ -510,6 +510,13 @@ def parse_args(args):
         help='Kernel size snd stride for the convolutional layers in the vision tower.'
     )
 
+    parser.add_argument(
+        '--grayscale_only',
+        type=bool,
+        default=False,
+        help='If true, only use grayscale tokens in the vision tower.'
+    )
+
     args = parser.parse_args(args)
 
     if 'timm' not in args.opt:

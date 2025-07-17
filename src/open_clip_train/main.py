@@ -76,6 +76,7 @@ def main(args):
         args.tokenization_pipeline,
         args.conv1_patch_size,
         args.convb_patch_size,
+        args.grayscale_only
     )
 
     if torch.cuda.is_available():
