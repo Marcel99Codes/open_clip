@@ -38,45 +38,47 @@ def load_data_and_classes(dataset_name, preprocess, class_subset=None):
     if dataset_name == "imagenet1k":
         dataset = load_dataset("benjamin-paine/imagenet-1k-256x256", split="validation")
         labels = dataset.features["label"].names
-        class_names = [labels[i].replace("_", " ") for i in range(len(labels))]
+        # Use integer indices for class_names
+        class_names = list(range(len(labels)))
+        key = "label"
 
     elif dataset_name == "imagenet_a":
-        dataset = load_dataset("Voxel51/ImageNet-A", split="train", download_mode="reuse_cache_if_exists")
-        labels = dataset.features["label"].names
-        class_names = [labels[i].replace("_", " ") for i in range(len(labels))]
+        # WebDataset-based ImageNet-A
+        dataset = load_dataset("clip-benchmark/wds_imagenet-a", split="test", streaming=True)
+        key = "cls"
+        # Use integer indices for class_names
+        class_names = list(range(200))  # ImageNet-A has 200 classes
+
+    elif dataset_name == "imagenet_o":
+        # WebDataset-based ImageNet-R
+        dataset = load_dataset("clip-benchmark/wds_imagenet-o", split="test", streaming=True)
+        key = "cls"
+        # Use integer indices for class_names
+        class_names = list(range(200))  # ImageNet-A has 200 classes
 
     elif dataset_name == "imagenet_c":
         dataset = load_dataset("ang9867/ImageNet-C", split="validation", streaming=True)
         labels = dataset.features["label"].names
-        class_names = [labels[i].replace("_", " ") for i in range(len(labels))]
+        # Use integer indices for class_names
+        class_names = list(range(len(labels)))
+        key = "label"
 
     else:
         raise ValueError(f"Unsupported dataset: {dataset_name}")
 
+    # Handle subset filtering
     if class_subset is not None:
-        if dataset_name == "imagenet_a":
-            class_subset = [c.strip() for c in class_subset.split(",")]
-            class_names = [c for c in class_names if c in class_subset]
+        indices = [int(i) for i in class_subset.split(",")]
+        class_names = [i for i in indices]  # keep as integers
+        valid_set = set(indices)
+        dataset = dataset.filter(lambda x: x[key] in valid_set)
 
-            # Map class name -> original index
-            name_to_idx = {name: i for i, name in enumerate(labels)}
-            dataset = dataset.filter(lambda x: labels[x["label"]] in class_subset)
-
-            # Remap label -> new subset index
-            new_name_to_idx = {c: i for i, c in enumerate(class_names)}
-            dataset = dataset.map(lambda x: {"label": new_name_to_idx[labels[x["label"]]]})
-
-        else:
-            indices = [int(i) for i in class_subset.split(",")]
-            class_names = [class_names[i] for i in indices]
-            valid_set = set(indices)
-            dataset = dataset.filter(lambda x: x["label"] in valid_set)
-
-            # Remap label -> new index
-            idx_map = {old: new for new, old in enumerate(indices)}
-            dataset = dataset.map(lambda x: {"label": idx_map[x["label"]]})
+        # Remap label → new index (0..len(indices)-1)
+        idx_map = {old: new for new, old in enumerate(indices)}
+        dataset = dataset.map(lambda x: {key: idx_map[x[key]]})
 
     return dataset, class_names
+
 
 
 # -------------------------
@@ -87,12 +89,11 @@ def evaluate(dataset, class_names, text_features, batch_size=64, preprocess=None
     images, labels = [], []
 
     for sample in tqdm(dataset, desc="Evaluating", leave=False):
-        images.append(preprocess(sample["image"]))
+        key = "image" if "image" in sample else "jpg"
+        images.append(preprocess(sample[key]))
 
-        if "label_name" in sample:
-            labels.append(class_names.index(sample["label_name"]))
-        else:
-            labels.append(sample["label"])
+        key = "label" if "label" in sample else "cls"
+        labels.append(sample[key])
 
         if len(images) == batch_size:
             imgs = torch.stack(images).to(device)
@@ -121,7 +122,7 @@ def evaluate(dataset, class_names, text_features, batch_size=64, preprocess=None
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str, required=True,
-                        choices=["imagenet1k", "imagenet_a", "imagenet_c"],
+                        choices=["imagenet1k", "imagenet_a", "imagenet_c", "imagenet_o"],
                         help="Dataset to evaluate on")
     parser.add_argument("--epochs", type=int, default=20,
                         help="Number of epochs/checkpoints to evaluate")
@@ -137,7 +138,7 @@ if __name__ == "__main__":
     # -------------------------
     # Hardcoded checkpoint directories for the 4 runs
     # -------------------------
-    checkpoint_config =[
+    checkpoint_config_small =[
         {
             "path": "/data1/marcel/clip/models_dc_small/rgb/2025_07_15-10_03_33-model_ViT-B-16-lr_0.0005-b_512-j_8-p_amp/checkpoints", 
             "colorspace": "rgb", 
@@ -170,15 +171,41 @@ if __name__ == "__main__":
             "convb_patch_size": 56,
             "grayscale_only": False
         },
-
-
     ]
+
+    checkpoint_config_medium =[
+        {
+            "path": "/data1/marcel/clip/models_dc_medium/rgb/2025_09_07-09_47_10-model_ViT-B-16-lr_5e-05-b_512-j_2-p_amp/checkpoints", 
+            "colorspace": "rgb", 
+            "pipeline": "single",
+            "conv1_patch_size": 16,
+            "convb_patch_size": 16,
+            "grayscale_only": False
+        },
+        {
+            "path": "/data1/marcel/clip/models_dc_medium/ycbcr/2025_09_07-09_46_58-model_ViT-B-16-lr_5e-05-b_512-j_2-p_amp/checkpoints",
+            "colorspace": "ycbcr", 
+            "pipeline": "dual_c1",
+            "conv1_patch_size": 16,
+            "convb_patch_size": 56,
+            "grayscale_only": False
+        },
+        {
+            "path": "/data1/marcel/clip/models_dc_medium/grayscale/2025_09_07-09_47_42-model_ViT-B-16-lr_5e-05-b_512-j_2-p_amp/checkpoints",
+            "colorspace": "ycbcr", 
+            "pipeline": "dual_c1",
+            "conv1_patch_size": 16,
+            "convb_patch_size": 16,
+            "grayscale_only": True
+        },
+    ]
+
     # -------------------------
     # Evaluate all runs & checkpoints
     # -------------------------
     results = []
 
-    for run_idx, ckpt_config in enumerate(checkpoint_config):
+    for run_idx, ckpt_config in enumerate(checkpoint_config_medium):
         run_name = f"run_{run_idx+1}"
         print(f"\nEvaluating model: {run_name}")
 
@@ -202,9 +229,13 @@ if __name__ == "__main__":
             ckpt_path = os.path.join(ckpt_config["path"], f"epoch_{epoch}.pt")
             print(f"  Loading checkpoint: {ckpt_path}")
 
+            print(ckpt_config)
+
             checkpoint = torch.load(ckpt_path, map_location="cpu")
             state_dict = checkpoint.get("ema_state_dict", checkpoint.get("state_dict", checkpoint))
+            print(state_dict)
             state_dict = clean_state_dict(state_dict)
+            print(state_dict)
             missing, unexpected = model.load_state_dict(state_dict, strict=False)
             print(f"  Epoch {epoch}: missing {len(missing)} keys, unexpected {len(unexpected)} keys")
 
