@@ -4,78 +4,16 @@ import sys, os
 from datasets import load_dataset
 from tqdm import tqdm
 import csv
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 import open_clip
-from datasets import load_dataset
-from tqdm import tqdm
-import csv
 
 os.environ["HF_HUB_ENABLE_XET"] = "0"
 
 
-checkpoint_config_small =[
-    {
-        "path": "/data1/marcel/clip/models_dc_small/rgb/2025_07_15-10_03_33-model_ViT-B-16-lr_0.0005-b_512-j_8-p_amp/checkpoints", 
-        "colorspace": "rgb", 
-        "pipeline": "single",
-        "conv1_patch_size": 16,
-        "convb_patch_size": 16,
-        "grayscale_only": False
-    },
-    {
-        "path": "/data1/marcel/clip/models_dc_small/ycbcr/2025_07_14-16_39_55-model_ViT-B-16-lr_0.0005-b_512-j_8-p_amp/checkpoints",
-        "colorspace": "ycbcr", 
-        "pipeline": "dual_c1",
-        "conv1_patch_size": 16,
-        "convb_patch_size": 64,
-        "grayscale_only": False
-    },
-    {
-        "path": "/data1/marcel/clip/models_dc_small/grayscale/2025_07_17-06_47_13-model_ViT-B-16-lr_0.0005-b_512-j_8-p_amp/checkpoints",
-        "colorspace": "ycbcr", 
-        "pipeline": "dual_c1",
-        "conv1_patch_size": 16,
-        "convb_patch_size": 16,
-        "grayscale_only": True
-    },
-    {
-        "path": "/data1/marcel/clip/models_dc_small/lab/2025_07_16-12_14_53-model_ViT-B-16-lr_0.0005-b_512-j_8-p_amp/checkpoints",
-        "colorspace": "lab", 
-        "pipeline": "dual_c1",
-        "conv1_patch_size": 16,
-        "convb_patch_size": 56,
-        "grayscale_only": False
-    },
-]
-
-checkpoint_config_medium =[
-    {
-        "path": "/data1/marcel/clip/models_dc_medium/rgb/2025_09_07-09_47_10-model_ViT-B-16-lr_5e-05-b_512-j_2-p_amp/checkpoints", 
-        "colorspace": "rgb", 
-        "pipeline": "single",
-        "conv1_patch_size": 16,
-        "convb_patch_size": 16,
-        "grayscale_only": False
-    },
-    {
-        "path": "/data1/marcel/clip/models_dc_medium/ycbcr/2025_09_07-09_46_58-model_ViT-B-16-lr_5e-05-b_512-j_2-p_amp/checkpoints",
-        "colorspace": "ycbcr", 
-        "pipeline": "dual_c1",
-        "conv1_patch_size": 16,
-        "convb_patch_size": 56,
-        "grayscale_only": False
-    },
-    {
-        "path": "/data1/marcel/clip/models_dc_medium/grayscale/2025_09_07-09_47_42-model_ViT-B-16-lr_5e-05-b_512-j_2-p_amp/checkpoints",
-        "colorspace": "ycbcr", 
-        "pipeline": "dual_c1",
-        "conv1_patch_size": 16,
-        "convb_patch_size": 16,
-        "grayscale_only": True
-    },
-]
-
-
+# -------------------------
+# Helper: Fix checkpoint keys
+# -------------------------
 def clean_state_dict(state_dict):
     """Remove common prefixes like 'module.', 'model.', 'clip.' from checkpoint keys."""
     new_sd = {}
@@ -90,6 +28,9 @@ def clean_state_dict(state_dict):
     return new_sd
 
 
+# -------------------------
+# Dataset Loader
+# -------------------------
 def load_data_and_classes(dataset_name, preprocess, class_subset=None):
     if dataset_name == "imagenet1k":
         dataset = load_dataset("benjamin-paine/imagenet-1k-256x256", split="validation")
@@ -100,17 +41,16 @@ def load_data_and_classes(dataset_name, preprocess, class_subset=None):
     elif dataset_name == "imagenet_a":
         dataset = load_dataset("clip-benchmark/wds_imagenet-a", split="test", streaming=True)
         key = "cls"
-        class_indices = list(range(200))  # ImageNet-A has 200 classes
+        class_indices = list(range(200))
 
     elif dataset_name == "imagenet_o":
         dataset = load_dataset("clip-benchmark/wds_imagenet-o", split="test", streaming=True)
         key = "cls"
-        class_indices = list(range(200))  # ImageNet-A has 200 classes
+        class_indices = list(range(200))
 
     else:
         raise ValueError(f"Unsupported dataset: {dataset_name}")
 
-    # Handle subset filtering
     if class_subset is not None:
         indices = [int(i) for i in class_subset.split(",")]
         class_indices = [i for i in indices]
@@ -123,6 +63,9 @@ def load_data_and_classes(dataset_name, preprocess, class_subset=None):
     return dataset, class_names, class_indices
 
 
+# -------------------------
+# Evaluation
+# -------------------------
 def evaluate(dataset, class_names, text_features, batch_size=64, preprocess=None, device="cpu"):
     top1, top5, total = 0, 0, 0
     images, labels = [], []
@@ -155,33 +98,96 @@ def evaluate(dataset, class_names, text_features, batch_size=64, preprocess=None
     return top1, top5, total
 
 
+# -------------------------
+# Main
+# -------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str, required=True,
-                        choices=["imagenet1k", "imagenet_a", "imagenet_o"],
+                        choices=["imagenet1k", "imagenet_a", "imagenet_c", "imagenet_o"],
                         help="Dataset to evaluate on")
     parser.add_argument("--epochs", type=int, default=20,
                         help="Number of epochs/checkpoints to evaluate")
     parser.add_argument("--batch_size", type=int, default=64,
                         help="Batch size for evaluation")
     parser.add_argument("--class_subset", type=str, default=None,
-                        help="Comma-separated list of classes to evaluate, e.g., '0,5,10' or 'goldfish,great white shark'")
+                        help="Comma-separated list of classes to evaluate")
     parser.add_argument("--csv_file", type=str, default="evaluation_results.csv",
                         help="CSV file to save results")
 
     args = parser.parse_args()
 
+    # -------------------------
+    # Hardcoded checkpoint directories
+    # -------------------------
+    checkpoint_config_medium =[
+        {
+            "path": "/data1/marcel/clip/models_dc_medium/rgb/2025_09_07-09_47_10-model_ViT-B-16-lr_5e-05-b_512-j_2-p_amp/checkpoints", 
+            "colorspace": "rgb", 
+            "pipeline": "single",
+            "conv1_patch_size": 16,
+            "convb_patch_size": 16,
+            "grayscale_only": False
+        },
+        {
+            "path": "/data1/marcel/clip/models_dc_medium/ycbcr/2025_09_07-09_46_58-model_ViT-B-16-lr_5e-05-b_512-j_2-p_amp/checkpoints",
+            "colorspace": "ycbcr", 
+            "pipeline": "dual_c1",
+            "conv1_patch_size": 16,
+            "convb_patch_size": 56,
+            "grayscale_only": False
+        },
+        {
+            "path": "/data1/marcel/clip/models_dc_medium/grayscale/2025_09_07-09_47_42-model_ViT-B-16-lr_5e-05-b_512-j_2-p_amp/checkpoints",
+            "colorspace": "ycbcr", 
+            "pipeline": "dual_c1",
+            "conv1_patch_size": 16,
+            "convb_patch_size": 16,
+            "grayscale_only": True
+        },
+        {
+            "path": "/data1/marcel/clip/models_dc_medium/ycbcr/2025_09_11-15_26_52-model_ViT-B-16-lr_5e-05-b_512-j_2-p_amp/checkpoints",
+            "colorspace": "ycbcr", 
+            "pipeline": "single",
+            "conv1_patch_size": 16,
+            "convb_patch_size": 16,
+            "grayscale_only": False
+        },
+    ]
+
+
+    checkpoint_config_medium_small =[
+        {
+            "path": "/data1/marcel/clip/models_dc_medium/rgb_small/2025_09_14-10_54_13-model_ViT-B-16-gray-lr_5e-05-b_512-j_2-p_amp/checkpoints",
+            "colorspace": "rgb", 
+            "pipeline": "single",
+            "conv1_patch_size": 16,
+            "convb_patch_size": 16,
+            "grayscale_only": False
+        },
+        {
+            "path": "/data1/marcel/clip/models_dc_medium/ycbcr_small/2025_09_14-10_50_33-model_ViT-B-16-gray-lr_5e-05-b_512-j_4-p_amp/checkpoints",
+            "colorspace": "ycbcr", 
+            "pipeline": "dual_c1",
+            "conv1_patch_size": 16,
+            "convb_patch_size": 56,
+            "grayscale_only": False
+        },
+    ]
+
     results = []
 
-    for run_idx, ckpt_config in enumerate(checkpoint_config_medium):
+    for run_idx, ckpt_config in enumerate(checkpoint_config_medium_small):
         run_name = f"run_{run_idx+1}"
         print(f"\nEvaluating model: {run_name}")
 
-        # Device + model
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        model_name = "ViT-B-16"
+        model_name = "ViT-B-16-gray"
 
-        open_clip.transformer_args.set_transformer_args(ckpt_config["pipeline"], ckpt_config["conv1_patch_size"], ckpt_config["convb_patch_size"], ckpt_config["grayscale_only"])
+        open_clip.transformer_args.set_transformer_args(
+            ckpt_config["pipeline"], ckpt_config["conv1_patch_size"],
+            ckpt_config["convb_patch_size"], ckpt_config["grayscale_only"]
+        )
         model, _, preprocess = open_clip.create_model_and_transforms(
             model_name, pretrained=None, colorspace=ckpt_config["colorspace"]
         )
@@ -195,7 +201,6 @@ if __name__ == "__main__":
         for epoch in range(1, args.epochs + 1):
             ckpt_path = os.path.join(ckpt_config["path"], f"epoch_{epoch}.pt")
             print(f"  Loading checkpoint: {ckpt_path}")
-
             print(ckpt_config)
 
             checkpoint = torch.load(ckpt_path, map_location="cpu")
@@ -207,15 +212,46 @@ if __name__ == "__main__":
             model = model.to(device)
             model.eval()
 
-            text_inputs = tokenizer([f"a photo of a {c}" for c in class_names]).to(device)
-            with torch.no_grad():
-                text_features = model.encode_text(text_inputs)
-                text_features /= text_features.norm(dim=-1, keepdim=True)
+            # -------------------------
+            # Prompt ensembling for text features
+            # -------------------------
+            templates = [
+                "a photo of a {}",
+                "a blurry photo of a {}",
+                "a close-up photo of a {}",
+                "a black and white photo of a {}",
+                "a bright photo of a {}",
+                "a cropped photo of a {}",
+                "a dark photo of a {}",
+                "a drawing of a {}",
+                "a low resolution photo of a {}",
+                "a rendering of a {}",
+                "a sketch of a {}",
+                "a photo of the {}",
+                "a photo of my {}",
+                "a photo of one {}",
+                "a photo of many {}",
+                "a picture of a {}",
+                "a picture of the {}",
+            ]
 
-            top1, top5, total = evaluate(dataset, class_names, text_features,
-                                         batch_size=args.batch_size,
-                                         preprocess=preprocess,
-                                         device=device)
+            text_features_list = []
+            for template in templates:
+                texts = [template.format(c) for c in class_names]
+                text_inputs = tokenizer(texts).to(device)
+                with torch.no_grad():
+                    class_embeddings = model.encode_text(text_inputs)
+                    class_embeddings /= class_embeddings.norm(dim=-1, keepdim=True)
+                    text_features_list.append(class_embeddings)
+
+            text_features = torch.stack(text_features_list).mean(dim=0)
+            text_features /= text_features.norm(dim=-1, keepdim=True)
+
+            # Evaluate
+            top1, top5, total = evaluate(
+                dataset, class_names, text_features,
+                batch_size=args.batch_size, preprocess=preprocess, device=device
+            )
             acc1, acc5 = 100 * top1 / total, 100 * top5 / total
             results.append([run_name, epoch, acc1, acc5])
             print(f"  Epoch {epoch}: Top-1 {acc1:.2f}%, Top-5 {acc5:.2f}%")
