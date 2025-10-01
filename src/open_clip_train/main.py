@@ -229,16 +229,6 @@ def main(args):
         model_kwargs['init_logit_scale'] = np.log(10)  # different from CLIP
         model_kwargs['init_logit_bias'] = -10
 
-
-    # Computing the mean and std for other colorspaces
-    if args.colorspace != 'rgb':
-        mean, std = load_normalization_stats(args.colorspace, "normalization")
-        print(f"Mean ({args.colorspace}): {mean}")
-        print(f"Std ({args.colorspace}): {std}")
-        args.image_mean = mean
-        args.image_std = std
-
-
     model, preprocess_train, preprocess_val = create_model_and_transforms(
         args.model,
         args.pretrained,
@@ -570,20 +560,3 @@ def copy_codebase(args):
     copytree(current_code_path, new_code_path, ignore=ignore_patterns('log', 'logs', 'wandb'))
     print("Done copying code.")
     return 1
-
-import json
-import os
-def load_normalization_stats(color_space: str, base_path: str = "."):
-    filename = f"norm_{color_space.lower()}.json"
-    filepath = os.path.join(base_path, filename)
-
-    if not os.path.exists(filepath):
-        raise FileNotFoundError(f"Normalization file not found: {filepath}")
-
-    with open(filepath, "r") as f:
-        stats = json.load(f)
-
-    return stats["mean"], stats["std"]
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

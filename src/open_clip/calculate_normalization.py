@@ -13,22 +13,17 @@ from open_clip.transform import image_transform
 
 def compute_streaming_mean_std(
     shards_dir: str,
-    image_size: Union[int, Tuple[int, int]] = 224,
-    color_space: str = "rgb",
-    max_images: int = 10000,
-    batch_size: int = 64,
-    save_path: str = None,
+    image_size: Union[int, Tuple[int, int]],
+    color_space: str,
+    max_images: int,
+    batch_size: int,
+    save_in_file : bool,
+    save_path: str,
+
 ):
-    node_rank = int(os.environ.get("RANK", 0))
-    num_nodes = int(os.environ.get("WORLD_SIZE", 1))
+    all_shards = sorted(os.path.join(shards_dir, f) for f in os.listdir(shards_dir) if f.endswith('.tar'))
 
-    all_shards = sorted(glob.glob(os.path.join(shards_dir, "*.tar")))
-    if num_nodes > 1:
-        shards_for_node = [shard for i, shard in enumerate(all_shards) if i % num_nodes == node_rank]
-    else:
-        shards_for_node = all_shards
-
-    tf = image_transform(
+    transformation = image_transform(
         image_size=image_size,
         is_train=False,
         mean=None,
@@ -39,11 +34,11 @@ def compute_streaming_mean_std(
         aug_cfg=None,
     )
 
-    dataset = (wds.WebDataset(shards_for_node)
+    dataset = (wds.WebDataset(all_shards)
         .shuffle(1000)
         .decode("pil")
         .to_tuple("jpg")
-        .map_tuple(tf)
+        .map_tuple(transformation)
         .batched(batch_size)
     )
 
@@ -52,9 +47,10 @@ def compute_streaming_mean_std(
     n_pixels = 0
     processed = 0
 
+    # Tqdm wraps iterable with a progress bar
     for batch in tqdm(dataset, desc="Computing mean/std"):
-        if isinstance(batch, (tuple, list)):
-            batch = batch[0]
+        #if isinstance(batch, (tuple, list)):
+            #batch = batch[0]
 
         # Expect shape [B, 3, H, W]
         if batch.ndim != 4 or batch.shape[1] != 3:
@@ -63,8 +59,8 @@ def compute_streaming_mean_std(
 
         batch = batch.to(torch.float32)
 
-        sum += batch.sum( dim=(0, 2, 3), dtype=torch.float64 )
-        squared_sum += (batch**2).sum( dim=(0, 2, 3), dtype=torch.float64 )
+        sum += batch.sum(dim=(0, 2, 3)) #sum per channel
+        squared_sum += (batch**2).sum(dim=(0, 2, 3)) #squared sum per channel
 
         n_pixels += batch.shape[0] * batch.shape[2] * batch.shape[3]
         processed += batch.shape[0]
@@ -72,29 +68,22 @@ def compute_streaming_mean_std(
         if processed >= max_images:
             break
 
-    if processed == 0 or n_pixels == 0:
-        raise RuntimeError("No valid images were processed.")
-
     mean = sum / n_pixels
     std = torch.sqrt((squared_sum - (sum**2) / n_pixels) / (n_pixels - 1))
-
-    print("Mean :", mean.tolist())
-    print("Std  :", std.tolist())
-
 
     print(f"\n[RESULT] Dataset mean ({color_space}): {mean.tolist()}")
     print(f"[RESULT] Dataset std  ({color_space}): {std.tolist()}")
 
-    if save_path is None:
-        save_path = f"./normalization/norm_{color_space}.json"
-
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    with open(save_path, "w") as f:
-        json.dump({"mean": mean.tolist(), "std": std.tolist()}, f, indent=2)
-        print(f"[INFO] Saved normalization stats to {save_path}")
+    if save_in_file:
+        if save_path is None:
+            save_path = f"./normalization/norm_{color_space}.json"
+    
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        with open(save_path, "w") as f:
+            json.dump({"mean": mean.tolist(), "std": std.tolist()}, f, indent=2)
+            print(f"[INFO] Saved normalization stats to {save_path}")
 
     return mean.tolist(), std.tolist()
-
 
 if __name__ == "__main__":
     import argparse
@@ -105,6 +94,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_images", type=int, default=10000, help="Max number of images to process")
     parser.add_argument("--batch_size", type=int, default=64, help="Batch size")
     parser.add_argument("--color_space", type=str, default="rgb", choices=["rgb", "hsv", "ycbcr", "lab"])
+    parser.add_argument("--save_in_file", action="store_false", help="Whether to save the results in a file")
     parser.add_argument("--save_path", type=str, default=None, help="Path to save mean/std JSON")
 
     args = parser.parse_args()

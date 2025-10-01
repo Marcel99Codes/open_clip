@@ -9,7 +9,7 @@ import torchvision.transforms.functional as F
 from torchvision.transforms import Normalize, Compose, RandomResizedCrop, InterpolationMode, ToTensor, Resize, \
     CenterCrop, ColorJitter, Grayscale
 
-from .constants import OPENAI_DATASET_MEAN, OPENAI_DATASET_STD
+from .constants import OPENAI_DATASET_MEAN, OPENAI_DATASET_STD, YCBCR_DATACOMP_MEAN, YCBCR_DATACOMP_STD, HSV_DATACOMP_MEAN, HSV_DATACOMP_STD, LAB_DATACOMP_MEAN, LAB_DATACOMP_STD
 from .utils import to_2tuple
 
 
@@ -234,20 +234,6 @@ class CenterCropOrPad(torch.nn.Module):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(size={self.size})"
 
-
-def _convert_to_rgb(image):
-    return image.convert('RGB')
-
-def _convert_to_ycbcr(image):
-    return image.convert('YCbCr')
-
-def _convert_to_hsv(image):
-    return image.convert('HSV')
-
-def _convert_to_lab(image):
-    return image.convert('LAB')
-
-
 class color_jitter(object):
     """
     Apply Color Jitter to the PIL image with a specified probability.
@@ -279,6 +265,17 @@ class gray_scale(object):
         else:
             return img
 
+def _convert_to_rgb(image):
+    return image.convert('RGB')
+
+def _convert_to_ycbcr(image):
+    return image.convert('YCbCr')
+
+def _convert_to_hsv(image):
+    return image.convert('HSV')
+
+def _convert_to_lab(image):
+    return image.convert('LAB')
 
 def image_transform(
         image_size: Union[int, Tuple[int, int]],
@@ -291,14 +288,34 @@ def image_transform(
         aug_cfg: Optional[Union[Dict[str, Any], AugmentationCfg]] = None,
         color_space: str = "rgb",
 ):  
-    if mean is None and color_space.lower() == "rgb":
-        mean = OPENAI_DATASET_MEAN
+    # Load the mean for each color space
+    if mean is None:
+        if color_space.lower() == "rgb":
+            mean = OPENAI_DATASET_MEAN
+        elif color_space.lower() == "ycbcr":
+            mean = YCBCR_DATACOMP_MEAN
+        elif color_space.lower() == "hsv":
+            mean = HSV_DATACOMP_MEAN
+        elif color_space.lower() == "lab":
+            mean = LAB_DATACOMP_MEAN
+        else:
+            raise NotImplementedError() 
     if mean is not None:
         if not isinstance(mean, (list, tuple)):
             mean = (mean,) * 3
 
-    if std is None and color_space.lower() == "rgb":
-        std = OPENAI_DATASET_STD
+    # Load the std for each color space
+    if std is None:
+        if color_space.lower() == "rgb":
+            std = OPENAI_DATASET_STD
+        elif color_space.lower() == "ycbcr":
+            std = YCBCR_DATACOMP_STD
+        elif color_space.lower() == "hsv":
+            std = HSV_DATACOMP_STD
+        elif color_space.lower() == "lab":
+            std = LAB_DATACOMP_STD
+        else:
+            raise NotImplementedError()
     if std is not None:
         if not isinstance(std, (list, tuple)):
             std = (std,) * 3
@@ -440,7 +457,4 @@ def image_transform_v2(
         aug_cfg=aug_cfg,
         color_space=color_space
     )
-
-    print(var)
-
     return var

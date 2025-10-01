@@ -543,6 +543,7 @@ class VisionTransformer(nn.Module):
         super().__init__()
         assert pool_type in ('tok', 'avg', 'none')
 
+        # Pass arguments from transformer_args
         color_space_tokenization = transformer_args.get_tokenization_pipeline()
         patch_size = transformer_args.get_conv1_patch_size()
         patch_size2 = transformer_args.get_convb_patch_size()
@@ -556,10 +557,11 @@ class VisionTransformer(nn.Module):
         self.final_ln_after_pool = final_ln_after_pool  # currently ignored w/ attn pool enabled
         self.output_dim = output_dim
 
-        print(f"[DEBUG] Selected tokenization pipeline={color_space_tokenization}, ")
-        print(f"[DEBUG] Conv1/a patch_size (kernel, stride)={patch_size}, patch_height={patch_height}, patch_width={patch_width}")
-        print(f"[DEBUG] Conv_b patch_size (kernel, stride)={patch_size2}, patch_height={patch2_height}, patch_width={patch2_width}")
+        #print(f"[DEBUG] Selected tokenization pipeline={color_space_tokenization}, ")
+        #print(f"[DEBUG] Conv1/a patch_size (kernel, stride)={patch_size}, patch_height={patch_height}, patch_width={patch_width}")
+        #print(f"[DEBUG] Conv_b patch_size (kernel, stride)={patch_size2}, patch_height={patch2_height}, patch_width={patch2_width}")
 
+        # Select tokenization pipeline
         if color_space_tokenization == "single":
             self.embeds = self._embeds
         elif color_space_tokenization == "dual_c1":
@@ -762,30 +764,30 @@ class VisionTransformer(nn.Module):
         c_color = x[:, 1:3, :, :]    # (B, 2, H, W)
         
         # Apply full-width convs
-        feat_shape = self.conv_a(c_shape)         # (B, width, grid, grid)
+        feat_shape = self.conv_a(c_shape) # (B, width, grid, grid)
         feat_color = self.conv_b(c_color) # (B, width, grid, grid)
 
         # Flatten both separately
         tokens_shape = feat_shape.flatten(2).permute(0, 2, 1)     # (B, grid², width)
         tokens_color = feat_color.flatten(2).permute(0, 2, 1) # (B, grid², width)
 
-        # Positional embeddings (reuse positional_embedding[:, 1:] twice)
-        pos_embed = self.positional_embedding.to(x.dtype)   # possibly (grid² + 1, width)
-        if pos_embed.ndim == 2:
-            pos_embed = pos_embed.unsqueeze(0)  
-        pos_tokens = pos_embed[:, 1:, :]                    # (1, grid², width)
+        # Positional embeddings twice
+        pos_embed = self.positional_embedding.to(x.dtype)   # (B, grid² + 1, width)
+        #if pos_embed.ndim == 2:
+        #   pos_embed = pos_embed.unsqueeze(0)  
+        pos_tokens = pos_embed[:, 1:, :]                    # (B, grid², width)
 
-        pos_embed2 = self.positional_embedding2.to(x.dtype)   # possibly (grid² + 1, width)
-        if pos_embed2.ndim == 2:
-            pos_embed2 = pos_embed2.unsqueeze(0)  
-        pos_tokens2 = pos_embed2[:, 1:, :]                    # (1, grid², width)
+        pos_embed2 = self.positional_embedding2.to(x.dtype)   # (B, grid² + 1, width)
+        #if pos_embed2.ndim == 2:
+        #    pos_embed2 = pos_embed2.unsqueeze(0)  
+        pos_tokens2 = pos_embed2[:, 1:, :]                    # (B, grid², width)
 
-        pos_cls = pos_embed[:, :1, :]                       # (1, 1, width)
+        pos_cls = pos_embed[:, :1, :]                       # (B, 1, width)
 
         tokens_shape = tokens_shape + pos_tokens  # (B, grid², width)
         tokens_color = tokens_color + pos_tokens2  # (B, grid², width)
 
-        # Concatenate token sets → (B, grid², width)
+        # Concatenate token for shape and color
         if transformer_args.get_grayscale_only():
             x_tokens = tokens_shape
         else:
@@ -797,6 +799,8 @@ class VisionTransformer(nn.Module):
 
         # Patch dropout and layernorm
         x_tokens = self.patch_dropout(x_tokens)
+
+        # apply norm before transformer
         x_tokens = self.ln_pre(x_tokens)
 
         return x_tokens
