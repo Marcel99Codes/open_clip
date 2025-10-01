@@ -287,9 +287,10 @@ def image_transform(
         fill_color: int = 0,
         aug_cfg: Optional[Union[Dict[str, Any], AugmentationCfg]] = None,
         color_space: str = "rgb",
+        no_default_norm: bool = False,
 ):  
     # Load the mean for each color space
-    if mean is None:
+    if mean is None and no_default_norm is False:
         if color_space.lower() == "rgb":
             mean = OPENAI_DATASET_MEAN
         elif color_space.lower() == "ycbcr":
@@ -305,7 +306,7 @@ def image_transform(
             mean = (mean,) * 3
 
     # Load the std for each color space
-    if std is None:
+    if std is None and no_default_norm is False:
         if color_space.lower() == "rgb":
             std = OPENAI_DATASET_STD
         elif color_space.lower() == "ycbcr":
@@ -345,8 +346,8 @@ def image_transform(
     else:
         raise NotImplementedError()
     
-    print(f"[DEBUG] Selected colorspace={color_space}")
-    print(f"[DEBUG] Normalized mean={mean}, std={std}")
+    #print(f"[DEBUG] Selected colorspace={color_space}")
+    #print(f"[DEBUG] Normalized mean={mean}, std={std}")
     
     if mean is None or std is None:
         normalize = lambda x: x

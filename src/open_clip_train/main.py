@@ -560,3 +560,6 @@ def copy_codebase(args):
     copytree(current_code_path, new_code_path, ignore=ignore_patterns('log', 'logs', 'wandb'))
     print("Done copying code.")
     return 1
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

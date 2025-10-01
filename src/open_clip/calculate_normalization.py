@@ -32,6 +32,7 @@ def compute_streaming_mean_std(
         resize_mode="shortest",
         interpolation="bicubic",
         aug_cfg=None,
+        no_default_norm=True,
     )
 
     dataset = (wds.WebDataset(all_shards)
@@ -49,14 +50,15 @@ def compute_streaming_mean_std(
 
     # Tqdm wraps iterable with a progress bar
     for batch in tqdm(dataset, desc="Computing mean/std"):
-        #if isinstance(batch, (tuple, list)):
-            #batch = batch[0]
+        if isinstance(batch, (tuple, list)):
+            batch = batch[0]
 
         # Expect shape [B, 3, H, W]
         if batch.ndim != 4 or batch.shape[1] != 3:
             print(f"Skipping batch with unexpected shape: {batch.shape}")
             continue
 
+        #batch = batch.to(torch.float32)
         batch = batch.to(torch.float32)
 
         sum += batch.sum(dim=(0, 2, 3)) #sum per channel
@@ -93,8 +95,8 @@ if __name__ == "__main__":
     parser.add_argument("--image_size", type=int, default=224, help="Image size used for transforms")
     parser.add_argument("--max_images", type=int, default=10000, help="Max number of images to process")
     parser.add_argument("--batch_size", type=int, default=64, help="Batch size")
-    parser.add_argument("--color_space", type=str, default="rgb", choices=["rgb", "hsv", "ycbcr", "lab"])
-    parser.add_argument("--save_in_file", action="store_false", help="Whether to save the results in a file")
+    parser.add_argument("--color_space", type=str, default="ycbcr", choices=["rgb", "hsv", "ycbcr", "lab"])
+    parser.add_argument("--save_in_file", action="store_true", help="Whether to save the results in a file")
     parser.add_argument("--save_path", type=str, default=None, help="Path to save mean/std JSON")
 
     args = parser.parse_args()
@@ -105,5 +107,6 @@ if __name__ == "__main__":
         color_space=args.color_space,
         max_images=args.max_images,
         batch_size=args.batch_size,
-        save_path=args.save_path
+        save_path=args.save_path,
+        save_in_file=args.save_in_file
     )
