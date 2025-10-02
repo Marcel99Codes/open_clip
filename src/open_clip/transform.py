@@ -290,7 +290,7 @@ def image_transform(
         no_default_norm: bool = False,
 ):  
     # Load the mean for each color space
-    if mean is None and no_default_norm is False:
+    if no_default_norm is False:
         if color_space.lower() == "rgb":
             mean = OPENAI_DATASET_MEAN
         elif color_space.lower() == "ycbcr":
@@ -306,7 +306,7 @@ def image_transform(
             mean = (mean,) * 3
 
     # Load the std for each color space
-    if std is None and no_default_norm is False:
+    if no_default_norm is False:
         if color_space.lower() == "rgb":
             std = OPENAI_DATASET_STD
         elif color_space.lower() == "ycbcr":

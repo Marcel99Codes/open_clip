@@ -772,14 +772,14 @@ class VisionTransformer(nn.Module):
         tokens_color = feat_color.flatten(2).permute(0, 2, 1) # (B, grid², width)
 
         # Positional embeddings twice
-        pos_embed = self.positional_embedding.to(x.dtype)   # (B, grid² + 1, width)
-        #if pos_embed.ndim == 2:
-        #   pos_embed = pos_embed.unsqueeze(0)  
+        pos_embed = self.positional_embedding.to(x.dtype)   # (grid² + 1, width)
+        if pos_embed.ndim == 2:
+           pos_embed = pos_embed.unsqueeze(0)  
         pos_tokens = pos_embed[:, 1:, :]                    # (B, grid², width)
 
-        pos_embed2 = self.positional_embedding2.to(x.dtype)   # (B, grid² + 1, width)
-        #if pos_embed2.ndim == 2:
-        #    pos_embed2 = pos_embed2.unsqueeze(0)  
+        pos_embed2 = self.positional_embedding2.to(x.dtype)   # (grid² + 1, width)
+        if pos_embed2.ndim == 2:
+            pos_embed2 = pos_embed2.unsqueeze(0)  
         pos_tokens2 = pos_embed2[:, 1:, :]                    # (B, grid², width)
 
         pos_cls = pos_embed[:, :1, :]                       # (B, 1, width)
@@ -959,10 +959,16 @@ class VisionTransformer(nn.Module):
         return take_indices
 
     def forward(self, x: torch.Tensor):
+        # Call the patch embedding -> x has then shape [batch_size, num_patches, width]
         x = self.embeds(x)
+
+        # Call the transformer (multi-head self-attention blocks)
         x = self.transformer(x)
+
+        # Call the attentional pooling or global pooling (make a single vector out of the tokens)
         pooled, tokens = self._pool(x)
 
+        # Final linear projection (CLIP needs image embedding to be in the same space as text embedding)
         if self.proj is not None:
             pooled = pooled @ self.proj
 
